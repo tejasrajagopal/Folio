@@ -90,6 +90,8 @@
 
   .frame{position:absolute;inset:0;pointer-events:none;opacity:var(--fo)}
   .stage:not(.ready) .frame{transition:opacity .4s ease}
+  /* exit: frames fade once via CSS (driving --fo/--s per frame restyled every handle and cost ~half the frames) */
+  .stage.exiting .frame{opacity:0;visibility:hidden;transition:opacity .2s ease-out,visibility 0s .2s}
   .card-select{position:absolute;left:50%;top:50%;pointer-events:none;--s:1;--fo:1;opacity:0}
   .stage:not(.ready) .card-select{transition:opacity .4s ease}
   .frame b{position:absolute;inset:0;border-radius:var(--radius);padding:calc(var(--fbw) * 1px / var(--s));
@@ -449,7 +451,7 @@
       logoHold:[0.55,0,3,0.05],
       logoScale:[1.6,0.5,6,0.05],
       logoStays:true,
-      flight:[1.1,0.3,2.5,0.05],
+      flight:[1.6,0.3,2.5,0.05],
       stagger:[90,0,200,1],             // average ms between cards; front cards get the widest gaps
       order:{ type:"select", options:["front first","back first","around"], default:"front first" },
       fromScale:[2.4,1.2,5,0.05],
@@ -489,7 +491,7 @@
       statementIn:[0.5,0.2,1.5,0.05],
       read:[1.5,0.5,4,0.05],
       exit:[0.9,0.5,3,0.05],
-      flyScale:[3,1.5,6,0.1],
+      flyScale:[2.2,1.5,6,0.1],
       flyStagger:[0.5,0,1.5,0.01],
       blur:[10,0,20,0.5],
     },
@@ -1064,7 +1066,7 @@
     // clear, so front cards fade out under its last lines instead of colliding with them; the hero only with clearText.
     if (!txtClear || now - txtClear.t > 250){
       const pad = RS.padding, list = [];
-      [[RS.clearText ? centre : null, 1 - heroAway], [statementEl, stIn * (1 - clamp(mph*3))]].forEach(([el, wt]) => {
+      [[RS.clearText ? centre : null, 1 - heroAway], [statementEl, stIn]].forEach(([el, wt]) => {
         if (!el || wt < 0.05) return;
         const r = el.getBoundingClientRect(); if (!r.width) return;
         list.push({ l: r.left - pad - innerWidth/2, r: r.right + pad - innerWidth/2, t: r.top - pad - innerHeight/2, b: r.bottom + pad - innerHeight/2,
@@ -1124,6 +1126,8 @@
 
     const ar = ASPECT[V.Cards.aspect] || 9/16;
 
+    const exiting = mph > 0.01;
+    if (stage._ex !== exiting){ stage._ex = exiting; stage.classList.toggle('exiting', exiting); }
     const ringGone = mph >= 1 && exId === -1;          // all cards have left: skip their per-frame work entirely
     put(ring, 'visibility', ringGone ? 'hidden' : '');
     if (!ringGone) for (let pi = 0; pi < poses.length; pi++){ const o = poses[pi];
@@ -1143,11 +1147,11 @@
         else {
           // depth z eases from near the camera to the ring; scale = 1/z, and position scales with it
           // around the vanishing point (the logo), so size and travel always agree — no sliding
-          const ez = easeOutQuint(e);
+          const ez = easeOut(e);                                        // gentle: the scale-down stays visible all the way in
           const z0 = 1/I.fromScale, zz = lerp(z0, 1, ez), d = 1/zz;
-          sx = o.sx * d; sy = o.sy * d; sc = os * d;
+          sx = o.sx * d; sy = o.sy * d; sc = os * rk * d;              // rk: same screen-size scale the card settles at (no snap on landing)
           // no live blur here: a changing filter on a 2.4×-scaled card re-rasterises it every frame
-          op *= easeOutQuad(clamp(e / 0.35));
+          op *= easeOutQuad(clamp(e / 0.3));
         }
       }
 
@@ -1177,8 +1181,7 @@
         const eo = easeInOutCubic(ef);
         const d = 1 / lerp(1, 1/C.flyScale, eo);                 // depth → scale, around the vanishing point
         sx *= d; sy *= d; sc *= d;
-        bl += C.blur*bK * eo * eo;
-        op *= 1 - easeInOutCubic(clamp((ef - 0.35) / 0.65));
+        op *= 1 - easeInOutCubic(clamp(ef / 0.6));                // gone by 60% of the flight: big half-transparent layers are what costs frames
       }
 
       // keep the text readable: a card covering it fades (and softens) away, smoothed so it never flickers
@@ -1190,7 +1193,7 @@
         }
         const fz = clamp((cov - RS.tolerance) / RS.fadeRange), tgt = fz*fz*(3 - 2*fz);   // smoothstep: decisive, no half-ghosts
         c.clr = (c.clr || 0) + (tgt - (c.clr || 0)) * (1 - Math.exp(-dt / 0.18));
-        if (c.clr > 0.002){ op *= 1 - easeInOutCubic(c.clr); bl += c.clr * 3 * bK; }
+        if (c.clr > 0.002) op *= 1 - easeInOutCubic(c.clr);          // opacity only: a blur here toggled filters and re-rasterised cards
       } else c.clr = 0;
 
       // case view: this card expands from wherever it is; everything else steps back fast (≈200ms of the 500)
@@ -1225,9 +1228,9 @@
       if (o.ci === frontCi) frontPose = { sx, sy, w: c.w*sc, h: c.h*sc, z, lbl: c.lbl.textContent, e };
       if (mode !== 'never') fo = Math.max(fo, g >= 0.98 ? 1 : 0, o.ci===exId && exP>0.98 ? 1 : 0);
       if (e < 1) fo = 0;
-      const foV = fo * (1 - clamp(mph*3));
+      const foV = fo;
       put(el, '--fo', foV.toFixed(2));
-      if (foV > 0) put(el, '--s', F.keepCrisp ? q(Math.max(0.05, sc), 1/64).toFixed(4) : '1');
+      if (foV > 0 && !exiting) put(el, '--s', F.keepCrisp ? q(Math.max(0.05, sc), 1/64).toFixed(4) : '1');
     }
 
     // selection overlay (front-only mode): sized in real pixels, not scaled → crisp lines, no shimmer
