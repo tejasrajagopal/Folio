@@ -266,7 +266,6 @@
   .paused .hero-cue .line i{animation-play-state:paused}
   @media (prefers-reduced-motion: reduce){ .hero-cue .line i{animation:none;transform:translateY(30%)} }
   @media (max-width:700px){ .hero-cue{display:none} }
-  .m-list .hero-cue{display:none}
   /* soft fade at the bottom edge while the work is on screen (a gradient, not a backdrop blur: no per-frame re-blur while scrolling) */
   .edge-blur{position:fixed;left:0;right:0;bottom:0;height:240px;z-index:150;pointer-events:none;opacity:0;transition:opacity .4s ease;
     background:linear-gradient(to top,color-mix(in srgb,var(--bg) 85%,transparent) 0%,color-mix(in srgb,var(--bg) 55%,transparent) 30%,color-mix(in srgb,var(--bg) 0%,transparent) 100%)}
@@ -302,17 +301,23 @@
   @media (hover:none){ .hint{display:none} }
   /* ---- phone list layout: no orbit — hero, a scroll cue, then the work with a bottom bar */
   .scroll-cue{display:none}
-  .m-list .ring,.m-list .statement-text,.m-list .caption,.m-list .hint,.m-list .progress{display:none}
-  .m-list .centre{top:60px}
+  .m-list .ring,.m-list .caption,.m-list .hint,.m-list .progress{display:none}
+  /* phones: the hero is centred in the first screen, with the gradient line under "Get in touch" as the scroll hint;
+     then the paragraph (moved out of the stage into .m-intro by JS) reads in as you scroll, then the line + "Scroll down for works" */
+  .m-list .orbit-section{height:auto}
+  .m-list .stage{position:relative;height:auto;min-height:100vh;min-height:100svh;display:flex;align-items:center;justify-content:center;padding:64px 0}
+  .m-list .centre{position:relative;left:auto;top:auto;transform:none}
+  .m-list .hero-cue{display:block}
+  .m-intro{display:none}
+  .m-list .m-intro{display:flex;flex-direction:column;align-items:center;gap:56px;padding:8px 0 72px}
+  .m-list .statement-text{position:relative;left:auto;top:auto;z-index:1;transform:none}
   .m-list h1{font-size:44px}
   @media (max-width:700px){ .m-list h1{white-space:normal;width:6.2em;margin:0 auto} }   /* two lines on phones only */
   .m-list .sub{font-size:16px}
-  .m-list .scroll-cue{display:flex;flex-direction:column;align-items:center;gap:66px;position:absolute;left:50%;bottom:58px;transform:translateX(-50%);z-index:2;
-    font-family:"Geist Mono",monospace;font-size:14px;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 70%,transparent);white-space:nowrap;
-    opacity:0;transition:opacity .6s ease .6s}
-  .m-list .stage.in .scroll-cue{opacity:1}
+  .m-list .scroll-cue{display:flex;flex-direction:column;align-items:center;gap:28px;
+    font-family:"Geist Mono",monospace;font-size:14px;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 70%,transparent);white-space:nowrap}
   /* the line: a quiet travelling highlight that says "keep going" (constant motion → linear) */
-  .scroll-cue i{position:relative;display:block;width:1px;height:215px;background:var(--wframe);overflow:hidden}
+  .scroll-cue i{position:relative;display:block;width:1px;height:120px;background:var(--wframe);overflow:hidden}
   .scroll-cue i::after{content:""}
   @keyframes cue{to{transform:translateY(250%)}}
   @media (prefers-reduced-motion: reduce){ .scroll-cue i::after{animation:none;display:none} }
@@ -374,6 +379,7 @@
     <div class="hint chrome" id="hint">Drag to spin</div>
   </div>
 </section>
+<div class="m-intro" id="mIntro"></div>
 
 <section class="works" id="works" aria-labelledby="worksHeading"><h2 class="sr-only" id="worksHeading">Selected work</h2><div class="wg" id="worksGrid"><article class="wcell" data-cat="projects" data-id="01"><div class="wframe"><div class="wimg"><img data-src="works/01.webp" alt="Ekaant Care — Stats" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Ekaant Care</h3></article><article class="wcell" data-cat="projects" data-id="02"><div class="wframe"><div class="wimg"><img data-src="works/02.webp" alt="Ekaant Care — App" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Ekaant Care</h3></article><article class="wcell" data-cat="projects" data-id="03"><div class="wframe"><div class="wimg"><img data-src="works/03.webp" alt="Ekaant Care — Mark" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Ekaant Care</h3></article><article class="wcell" data-cat="projects" data-id="04"><div class="wframe"><div class="wimg"><img data-src="works/04.webp" alt="Ekaant Care — Campaign" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Ekaant Care</h3></article><article class="wcell" data-cat="projects" data-id="05"><div class="wframe"><div class="wimg"><img data-src="works/05.webp" alt="Timelaps" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Timelaps</h3></article><article class="wcell" data-cat="projects" data-id="06"><div class="wframe"><div class="wimg"><img data-src="works/06.webp" alt="Anduro" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Anduro</h3></article><article class="wcell" data-cat="projects" data-id="07"><div class="wframe"><div class="wimg"><img data-src="works/07.webp" alt="Avant — Identity" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Avant</h3></article><article class="wcell" data-cat="projects" data-id="08"><div class="wframe"><div class="wimg"><img data-src="works/08.webp" alt="Avant — Illustration" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Avant</h3></article><article class="wcell" data-cat="projects" data-id="09"><div class="wframe"><div class="wimg"><img data-src="works/09.webp" alt="River — Dashboard" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">River</h3></article><article class="wcell" data-cat="projects" data-id="11"><div class="wframe"><div class="wimg"><img data-src="works/11.webp" alt="River — Data viz" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">River</h3></article><article class="wcell" data-cat="projects" data-id="12"><div class="wframe"><div class="wimg"><img data-src="works/12.webp" alt="Wayfind" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Wayfind</h3></article><article class="wcell" data-cat="projects" data-id="13"><div class="wframe"><div class="wimg"><img data-src="works/13.webp" alt="Fintech — Payments" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Fintech</h3></article><article class="wcell" data-cat="projects" data-id="14"><div class="wframe"><div class="wimg"><img data-src="works/14.webp" alt="Realised" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Realised</h3></article><article class="wcell" data-cat="projects" data-id="15"><div class="wframe"><div class="wimg"><img data-src="works/15.webp" alt="Rewards — Patches" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Rewards</h3></article><article class="wcell" data-cat="projects" data-id="16"><div class="wframe"><div class="wimg"><img data-src="works/16.webp" alt="Paw — Mark" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Paw</h3></article><article class="wcell" data-cat="projects" data-id="17"><div class="wframe"><div class="wimg"><img data-src="works/17.webp" alt="Home services — Booking" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">Home services</h3></article></div><div class="works-end"></div></section>
 </main>
@@ -753,18 +759,11 @@
     const cta = document.getElementById('cta'), cue = document.getElementById('heroCue');
     if (cta && cue && cta.offsetParent){ const cr = cta.getBoundingClientRect(), m = new DOMMatrix(getComputedStyle(cta).transform);
       cueTopPx = Math.round(cr.bottom - m.m42 - sr.top + 10); cue.style.top = cueTopPx + 'px'; cueDirty = true; }
-    // phones: the scroll line is pinned to the bottom, so on short screens it shortens to keep clear of "Get in touch"
-    const sc = document.querySelector('.scroll-cue'), pl = sc && sc.querySelector('i'), lb = sc && sc.querySelector('span');
-    if (cta && pl && document.documentElement.classList.contains('m-list')){
-      const cr = cta.getBoundingClientRect(), m = new DOMMatrix(getComputedStyle(cta).transform);
-      const room = Math.floor(lb.getBoundingClientRect().top - (cr.bottom - m.m42) - 32);   // label top → 32px under the link
-      const gap = Math.round(Math.min(66, Math.max(20, room * .3))), len = room - gap;
-      const fits = len >= 215;
-      sc.style.gap = fits ? '' : gap + 'px';
-      pl.style.height = fits ? '' : Math.max(0, len) + 'px';
-      pl.style.visibility = len < 40 ? 'hidden' : '';
-      sc.style.visibility = room < 0 ? 'hidden' : '';   // very short screens: the label would sit on the link
-    }
+    // phones: the hero line runs from under "Get in touch" towards the bottom of the first screen, as long as there's room
+    if (cue && document.documentElement.classList.contains('m-list') && cueTopPx !== null){
+      const len = Math.min(110, Math.round(sr.height - cueTopPx - 36));
+      cue.style.height = Math.max(0, len) + 'px'; cue.style.visibility = len < 36 ? 'hidden' : '';
+    } else if (cue) cue.style.visibility = '';
   }
   addEventListener('resize', () => requestAnimationFrame(measureMark));
   document.fonts && document.fonts.ready.then(() => requestAnimationFrame(measureMark));
@@ -880,6 +879,9 @@
   function applyStatic(v){
     wasMobile = isMobile(v);
     document.documentElement.classList.toggle('m-list', isList(v));
+    { const st = document.getElementById('statementText'), sc = document.querySelector('.scroll-cue'), mi = document.getElementById('mIntro'), sg = document.getElementById('stage');
+      if (isList(v)){ if (st.parentNode !== mi){ mi.append(st, sc); st.style.filter = ''; } }
+      else if (st.parentNode !== sg){ sg.insertBefore(st, document.getElementById('centre')); sg.insertBefore(sc, document.getElementById('centre')); st.style.opacity = ''; } }
     V = v;
     const r = document.documentElement.style, F = v.Frame, Dm = v.Dummies;
     const set = (k,val) => r.setProperty(k,val);
@@ -904,7 +906,7 @@
     ring.classList.toggle('noLabel', !F.label);
     ring.classList.toggle('noBorder', !F.border);
     const C = v.Choreography, mStart = C.heroOut*0.9 + C.statementIn + C.read + 0.1;
-    section.style.height = isList(v) ? '100vh' : ((mStart + C.exit + 1) * 100) + 'vh';     // pin long enough for: hero out → read → morph into the grid
+    section.style.height = isList(v) ? '' : ((mStart + C.exit + 1) * 100) + 'vh';     // pin long enough for: hero out → read → morph into the grid
     $('name').textContent = v.Text.name; splitNav();
     $('sub').textContent = v.Text.subtitle;
     $('caption').hidden = !v.Text.showCaption;
@@ -1040,6 +1042,8 @@
   function measureSections(){
     const wk = document.getElementById('works'), sy0 = scrollY;
     secs = { wkTop: wk.offsetTop };
+    { const st = document.getElementById('statementText'), t = st.style.transform; st.style.transform = 'none';
+      const r = st.getBoundingClientRect(); secs.stTop = r.top + sy0; secs.stH = r.height; st.style.transform = t; }
     cellRects = {}; nCells = 0;
     workCells = [...document.querySelectorAll('.wcell')].filter(c => !c.hidden);
     const saved = workCells.map(cell => cell.style.transform);
@@ -1408,7 +1412,10 @@
     const C = V.Choreography, cvw = innerWidth, cvh = innerHeight, wy = scrollY, u = wy / cvh;
     const heroAway = clamp(u / C.heroOut);
     const stIn = clamp((u - C.heroOut*0.9) / C.statementIn);
-    const readP = clamp((u - C.heroOut*0.9 - C.statementIn) / C.read);
+    const listMode0 = isList(V), stTopV = (secs.stTop || 0) - wy;
+    // phones: the paragraph reads in from when its top is 85% down the screen until its end is just past the middle
+    const readP = listMode0 ? clamp((cvh*0.85 - stTopV) / (cvh*0.3 + (secs.stH || 1)))
+                            : clamp((u - C.heroOut*0.9 - C.statementIn) / C.read);
     const mStart = C.heroOut*0.9 + C.statementIn + C.read + 0.1;
     const mph = clamp((u - mStart) / C.exit);                 // orbit leaves while the work rises from below
     const exO = easeInOutCubic(mph);
@@ -1663,7 +1670,7 @@
     const away = clamp(g*2.5) , exAway = clamp(exP*2.5);
     if (isList(V)){
       put(centre, 'opacity', '1'); put(centre, 'filter', 'none'); put(centre, 'pointerEvents', '');
-      put(centre, 'transform', 'translateX(-50%)');
+      put(centre, 'transform', 'none');
     } else {
       put(centre, 'opacity', q((1-heroAway)*(1-exAway), 0.005).toFixed(3));
       put(heroCue, '--co', q(1-clamp(heroAway*1.6), 0.005).toFixed(3));
@@ -1731,11 +1738,18 @@
       }
     }
     // statement: blurs in, then blurs out as the orbit leaves
+    if (listMode0){
+      // phones: it simply fades and rises in as it comes on screen (compositor-only), and stays
+      const k = reduce ? 1 : easeOutQuint(clamp((cvh*0.95 - stTopV) / (cvh*0.3)));
+      put(statementEl, 'opacity', q(k, 0.01).toFixed(2));
+      statementEl.style.transform = k >= 1 ? 'none' : `translateY(${((1-k)*20).toFixed(1)}px)`;
+    } else {
     const stOut = clamp(mph*3);
     put(statementEl, 'opacity', q(stIn * (1 - stOut), 0.005).toFixed(3));
     const stBlur = (1 - easeOutQuint(stIn)) * C.blur*bK + easeInOutCubic(stOut) * C.blur*bK;
     put(statementEl, 'filter', (stBlur > 0.05 && !reduce) ? `blur(${stBlur.toFixed(2)}px)` : 'none');
     statementEl.style.transform = `translate(-50%, calc(-50% + ${((1-easeOutQuint(stIn))*12 - easeInOutCubic(stOut)*16).toFixed(1)}px)) scale(${(1 + easeInOutCubic(stOut)*0.04).toFixed(4)})`;
+    }
     // work cells: each one fades and rises in from below as it enters the screen (compositor-only: no filter)
     for (const cell of workCells){
       const top = cell._docTop - wy;
