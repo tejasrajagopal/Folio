@@ -478,7 +478,7 @@
       order:{ type:"select", options:["front first","back first","around"], default:"front first" },
       fromScale:[2.4,1.2,5,0.05],
       fromBlur:[2,0,12,0.5],              // depth of field while near the camera (kept light: heavy blur read as a broken card)
-      settleScale:[1.3,1,2,0.01],        // cards land this much bigger, then ripple down to size
+      settleScale:[1,1,2,0.01],          // >1: cards land this much bigger, then ripple down to size (off: they fly straight to their final size)
       rippleSpread:[0.6,0,1.5,0.05],     // s for the scale-down wave to travel from the front of the ring to the back
       rippleDur:[0.95,0.3,2,0.05],       // s each card takes to spring down (with a little overshoot)
       textIn:[0.7,0.1,3,0.05],
