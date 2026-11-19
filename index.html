@@ -258,14 +258,6 @@
   .stage.in .hero-cue{opacity:var(--co,1)}
   .hero-cue .line{position:absolute;inset:0;background:var(--wframe);overflow:hidden;
     -webkit-mask-image:linear-gradient(to bottom,transparent,#000 45%);mask-image:linear-gradient(to bottom,transparent,#000 45%)}
-  /* scroll indicator: each time the colour run reaches the end of the line it lands like a drop —
-     two thin rings spread out from the line's end in a circle (same 2.2s cycle as the run, so they stay in step) */
-  .hero-cue .rr{position:absolute;left:50%;top:100%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%}
-  .hero-cue .rr{border:1px solid #244EE7;opacity:0;animation:cueRing 2.2s cubic-bezier(.16,1,.3,1) 1s infinite}
-  .hero-cue .rr2{border-color:#8D5FB7;animation-delay:1.24s}
-  @keyframes cueRing{0%,68%{transform:scale(1);opacity:0} 72%{opacity:.6} 100%{transform:scale(4.5);opacity:0}}
-  .paused .hero-cue .rr{animation-play-state:paused}
-  @media (prefers-reduced-motion: reduce){ .hero-cue .rr{animation:none} }
   /* a soft-ended gradient run that keeps travelling down the line (Pause stops it) */
   .hero-cue .line i,.scroll-cue i::after{position:absolute;left:0;top:0;width:1px;height:60%;
     background:linear-gradient(transparent,#F58E3F 18%,#ED583E 34%,#F06F8A 50%,#8D5FB7 64%,#244EE7 82%,transparent);
@@ -376,7 +368,7 @@
       </div>
       <a class="cta rise" id="cta" href="#" style="--d:.26s;--y:4px;--dur:.6s">Get in touch</a>
     </div>
-    <span class="hero-cue" id="heroCue" aria-hidden="true"><span class="line"><i></i></span><b class="rr"></b><b class="rr rr2"></b></span>
+    <span class="hero-cue" id="heroCue" aria-hidden="true"><span class="line"><i></i></span></span>
     <div class="ring" id="ring"></div>
     <div class="caption chrome" id="caption"><span class="fig" id="fig">Fig. 01</span><span>—</span><span class="name" id="cname"></span></div>
     <div class="hint chrome" id="hint">Drag to spin</div>
