@@ -32,8 +32,15 @@ index.html   the whole page: markup, styles and script
 fonts/       Jeju Myeongjo, Geist Mono and Geist Pixel (WOFF2, subset to Latin)
 works/       work images (WebP, 1280px)
 vendor/      DialKit (tuning panel) and Lenis (smooth scroll)
+404.html     real 404 page (stops every unknown URL returning the homepage)
+robots.txt, sitemap.xml, llms.txt, favicon.svg, apple-touch-icon.png, og-image.jpg   search and sharing
+_headers     cache rules for Cloudflare
 ```
 
 ## Deploy
 
 The site is plain static files, so it can be hosted on GitHub Pages, Vercel, Netlify or any static host. For GitHub Pages: Settings → Pages → deploy from the `main` branch, root folder.
+
+## SEO
+
+The head carries the description, canonical URL (`https://tejasrajagopal.com/`), Open Graph and Twitter tags, and a JSON-LD graph (WebSite, ProfilePage, Person, and the work as an ItemList). The subtitle, statement and work grid are also written into the initial HTML, so crawlers that don't run JavaScript still see them; the script then rebuilds them as before. If you change the name, subtitle, statement or works in `cfg`/`WORKS`, update the matching head tags, JSON-LD, initial HTML and `llms.txt` too.
