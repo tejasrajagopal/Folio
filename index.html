@@ -107,7 +107,7 @@
   .noHandles .frame i, .noLabel .frame span{display:none}
   .noBorder .frame b{display:none}
 
-  .centre{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:50;text-align:center;
+  .centre{position:absolute;left:50%;top:calc(50% - 2.2vh);transform:translate(-50%,-50%);z-index:50;text-align:center;   /* optical centre: a touch above the geometric middle */
     width:min(92vw,900px);pointer-events:none;will-change:opacity,transform,filter}
   .centre{display:flex;flex-direction:column;align-items:center;gap:48px;width:min(92vw,469px)}
   .c-top{display:flex;flex-direction:column;align-items:center;gap:40px;align-self:stretch}
@@ -400,8 +400,8 @@
       radius:[1.01,0.3,1.6,0.01],
       tilt:[36,0,70,1],
       perspective:[4150,800,8000,50],
-      centreX:[21,-500,500,1],
-      centreY:[-182,-400,400,1],
+      centreX:[0,-500,500,1],          // nudge from the auto-centred ring, px
+      centreY:[0,-400,400,1],          // nudge from the auto-centred ring, px
       startAngle:[-27,-180,180,1],
       stacking:{ type:"select", options:[{value:"depth (pops)",label:"Depth (eased swap)"},{value:"deck (smooth)",label:"Deck (no swap)"}], default:"deck (smooth)" },
     },
@@ -1088,12 +1088,21 @@
     while (poses.length < order.length) poses.push({ ci:0, k:0, a:0, sn:0, sx:0, sy:0, ps:1 });
     poses.length = order.length;
     let frontCi = -1, best = -2, frontPose = null;
+    // auto-centre: shift the ring so its full projected height (back card top → front card bottom) sits
+    // in the middle of the screen, whatever the window shape; phones keep their own offset
+    let ringCY = L.centreY*rk;
+    if (!isMob){
+      const hC = V.Cards.width * (ASPECT[V.Cards.aspect] || 9/16) * rk / 2;
+      const psB = persp/Math.max(120, persp + R*cT), psF = persp/Math.max(120, persp - R*cT);
+      const top = -R*sT*psB - hC*Z.back, bot = R*sT*psF + hC*Z.front;
+      ringCY = -(top + bot)/2 + L.centreY*rk;
+    }
     for (let k = 0; k < order.length; k++){
       const o = poses[k], th = Math.PI/2 + k*step - baseRot;
       const x = R*Math.cos(th), z = R*Math.sin(th);
       const ps = persp/Math.max(120, persp - z*cT);
       let a = (th - Math.PI/2) % TAU; if (a > Math.PI) a -= TAU; if (a <= -Math.PI) a += TAU;   // angle from the front
-      o.ci = order[k]; o.k = k; o.a = a; o.sn = Math.sin(th); o.sx = x*ps + L.centreX*rk; o.sy = z*sT*ps + L.centreY*rk; o.ps = ps;
+      o.ci = order[k]; o.k = k; o.a = a; o.sn = Math.sin(th); o.sx = x*ps + L.centreX*rk; o.sy = z*sT*ps + ringCY; o.ps = ps;
       if (o.sn > best){ best = o.sn; frontCi = o.ci; }
     }
     // flight order is fixed at the intro's start so cards don't reshuffle mid-flight
@@ -1168,8 +1177,12 @@
       }
       else {
         zr = 50 + (dir * o.a / Math.PI) * 49;
-        const wrap = clamp((Math.PI - Math.abs(o.a)) / (step*0.5 || 1));
-        op *= lerp(easeInOutCubic(wrap), 1, g);
+        // the one reorder happens as a card passes the very back: soften it with a short, partial dip
+        // (it used to fade the back card out over ~7s, leaving a hole at the top of the ring)
+        if (c.prevA !== undefined && Math.abs(o.a - c.prevA) > Math.PI) c.wrapT0 = now;
+        c.prevA = o.a;
+        const ww = c.wrapT0 ? clamp((now - c.wrapT0) / 320) : 1;
+        if (ww < 1) op *= lerp(lerp(0.5, 1, easeOutQuint(ww)), 1, g);
       }
       let z = Math.round(lerp(zr, 60, g));
 
