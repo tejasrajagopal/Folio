@@ -645,8 +645,9 @@
   // cache the name-block mark position (reading layout every frame forces a reflow)
   let markRect = null;
   function measureMark(){
-    const r = centreMark.getBoundingClientRect();
-    markRect = { cx: r.left + r.width/2 - innerWidth/2, cy: r.top + r.height/2 - innerHeight/2, w: r.width };
+    // relative to the stage's centre, not the window's: the window includes the scrollbar gutter, the stage doesn't
+    const r = centreMark.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+    markRect = { cx: r.left + r.width/2 - (sr.left + sr.width/2), cy: r.top + r.height/2 - (sr.top + sr.height/2), w: r.width };
   }
   addEventListener('resize', () => requestAnimationFrame(measureMark));
   document.fonts && document.fonts.ready.then(() => requestAnimationFrame(measureMark));
@@ -1298,11 +1299,11 @@
     // text to keep clear, each weighted by how visible it is (rects re-read 4×/s). The paragraph is always kept
     // clear, so front cards fade out under its last lines instead of colliding with them; the hero only with clearText.
     if (!txtClear || now - txtClear.t > 250){
-      const pad = RS.padding, list = [];
+      const pad = RS.padding, list = [], sr = stage.getBoundingClientRect(), ox = sr.left + sr.width/2, oy = sr.top + sr.height/2;
       [[RS.clearText ? centre : null, 1 - heroAway], [statementEl, stIn]].forEach(([el, wt]) => {
         if (!el || wt < 0.05) return;
         const r = el.getBoundingClientRect(); if (!r.width) return;
-        list.push({ l: r.left - pad - innerWidth/2, r: r.right + pad - innerWidth/2, t: r.top - pad - innerHeight/2, b: r.bottom + pad - innerHeight/2,
+        list.push({ l: r.left - pad - ox, r: r.right + pad - ox, t: r.top - pad - oy, b: r.bottom + pad - oy,
                     a: (r.width + 2*pad)*(r.height + 2*pad), wt });
       });
       txtClear = { t: now, list };
