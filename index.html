@@ -50,6 +50,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  html{scrollbar-gutter:stable}   /* locking scroll during the intro must not shift the layout where scrollbars take space */
   body{font-family:"Inter Tight",system-ui,sans-serif}
 
   .stage{cursor:grab;touch-action:pan-y} .stage.dragging{cursor:grabbing} .stage.dragging .card{cursor:grabbing}
@@ -449,7 +450,7 @@
       logoScale:[1.6,0.5,6,0.05],
       logoStays:true,
       flight:[1.1,0.3,2.5,0.05],
-      stagger:[60,0,200,1],
+      stagger:[90,0,200,1],             // average ms between cards; front cards get the widest gaps
       order:{ type:"select", options:["front first","back first","around"], default:"front first" },
       fromScale:[2.4,1.2,5,0.05],
       fromBlur:[5,0,12,0.5],
@@ -1012,18 +1013,25 @@
     const N = order.length, step = N ? TAU/N : 0;
 
     // ---- intro timeline: logo draws → works fly in from the camera, front first → text
-    const it = I.play ? Math.max(0,(now - introStart)/1000) : 1e6;
+    let it = I.play ? Math.max(0,(now - introStart)/1000) : 1e6;
     // reduced motion: same order, opacity only — no drawing, flying, blurring or gliding
     const LD = reduce ? 0.0001 : I.logoDraw, LH = reduce ? 0 : I.logoHold;
     const flight = reduce ? 0.5 : I.flight, stag = reduce ? 0 : I.stagger/1000;
     const tReveal = LD + LH;
+    const stagSpan = Math.max(0,N-1)*stag;
+    const flyDelay = r => N > 1 ? stagSpan * easeOutQuad(r/(N-1)) : 0;   // shrinking gaps: first cards clearly one by one
     if (!imagesReady && !introSkipped && I.play && it > tReveal && introStart > 0){ introStart += (it - tReveal) * 1000; }   // hold on the logo
-    const tSettled = tReveal + Math.max(0,N-1)*stag + flight;
-    const tText = tReveal + Math.max(0,N-1)*stag + flight*0.55;      // text starts as the last cards settle
+    const tSettled = tReveal + stagSpan + flight;
+    const tText = tReveal + stagSpan + flight*0.55;      // text starts as the last cards settle
     const tEnd = Math.max(tSettled, tText + I.textIn);
-    if (!introDone && it >= tEnd + 0.4) stage.classList.add('ready');
+    if (introSkipped && !introDone){                     // skipped: play the rest faster (ramping 1× → 3×) instead of cutting to the end
+      skipIt += dt * lerp(1, 3, easeInOutCubic(clamp((now - skipAt) / 350)));
+      it = Math.max(it, skipIt);
+      if (it >= tEnd) introStart = now - 60000;
+    }
+    if (it >= tEnd + 0.4 && !stage.classList.contains('ready')) stage.classList.add('ready');
     if (!introDone && it >= tEnd){ introDone = true; if (exId === -1) lock(false); try{ sessionStorage.setItem('orbitIntroSeen','1'); }catch(e){} }
-    else if (!introDone) lock(I.lockScroll);
+    else if (!introDone && !introSkipped) lock(I.lockScroll);
 
     // ---- scroll + ambient
     // ---- spin: auto-rotation (linear, constant) + drag/scroll momentum (exponential friction)
@@ -1116,7 +1124,9 @@
 
     const ar = ASPECT[V.Cards.aspect] || 9/16;
 
-    for (let pi = 0; pi < poses.length; pi++){ const o = poses[pi];
+    const ringGone = mph >= 1 && exId === -1;          // all cards have left: skip their per-frame work entirely
+    put(ring, 'visibility', ringGone ? 'hidden' : '');
+    if (!ringGone) for (let pi = 0; pi < poses.length; pi++){ const o = poses[pi];
       const c = cards[o.ci], el = c.el, sn = o.sn, t = (sn+1)/2;
 
       // orbit pose
@@ -1127,7 +1137,7 @@
       let op = lerp(1, D.backOpacity, f), bl = D.backBlur*bK*f*f, gr = f*D.backGreyscale;
 
       // intro: fly in from the camera — strong ease-out, big → settled, blur clears, fade in early
-      const e = clamp((it - tReveal - flightRank.rank[o.ci]*stag) / flight);
+      const e = clamp((it - tReveal - flyDelay(flightRank.rank[o.ci])) / flight);
       if (e < 1){
         if (reduce){ op *= e; }
         else {
@@ -1136,8 +1146,7 @@
           const ez = easeOutQuint(e);
           const z0 = 1/I.fromScale, zz = lerp(z0, 1, ez), d = 1/zz;
           sx = o.sx * d; sy = o.sy * d; sc = os * d;
-          const near = clamp((d - 1) / (I.fromScale - 1 || 1));        // 1 at the camera → 0 on the ring
-          bl += I.fromBlur*bK * near * near;                                // depth of field: blur only while close
+          // no live blur here: a changing filter on a 2.4×-scaled card re-rasterises it every frame
           op *= easeOutQuad(clamp(e / 0.35));
         }
       }
@@ -1197,7 +1206,7 @@
       el.style.transform = `translate3d(${sx.toFixed(1)}px,${sy.toFixed(1)}px,0) scale(${sc.toFixed(4)})`;
       put(el, 'opacity', q(op, 0.005).toFixed(3));
       // filter stays on (or off) for the whole scroll; toggling it per card re-rasterised the card and made it jump
-      const filterOn = D.backBlur > 0 || D.backGreyscale > 0 || e < 1;
+      const filterOn = D.backBlur > 0 || D.backGreyscale > 0;
       if (c.farOk){
         // depth look comes from the pre-rendered far image fading in; only short-lived blur (intro flight, exit,
         // eased swap) still uses a live filter, and it switches off entirely once those finish
@@ -1209,7 +1218,6 @@
         put(el, 'filter', filterOn ? `grayscale(${q(gr, 0.1).toFixed(1)}) blur(${q(Math.max(0, bl), e < 1 ? 0.25 : 0.5).toFixed(2)}px)` : 'none');
       }
       put(el, 'zIndex', String(z));
-      put(el, '--s', F.keepCrisp ? q(Math.max(0.05, sc), 1/64).toFixed(4) : '1');
       put(el, '--sh', q(V.Cards.shadow*t*(1-g), 0.01).toFixed(2));
       // frames: the front card is "selected" — switches instantly (it changes too often to fade)
       const mode = F.show;
@@ -1217,13 +1225,15 @@
       if (o.ci === frontCi) frontPose = { sx, sy, w: c.w*sc, h: c.h*sc, z, lbl: c.lbl.textContent, e };
       if (mode !== 'never') fo = Math.max(fo, g >= 0.98 ? 1 : 0, o.ci===exId && exP>0.98 ? 1 : 0);
       if (e < 1) fo = 0;
-      put(el, '--fo', (fo * (1 - clamp(mph*3))).toFixed(2));
+      const foV = fo * (1 - clamp(mph*3));
+      put(el, '--fo', foV.toFixed(2));
+      if (foV > 0) put(el, '--s', F.keepCrisp ? q(Math.max(0.05, sc), 1/64).toFixed(4) : '1');
     }
 
     // selection overlay (front-only mode): sized in real pixels, not scaled → crisp lines, no shimmer
     const showSel = F.show === 'front only' && frontPose && frontPose.e >= 1 && heroAway < 0.4 && exId === -1 && !(cards[frontCi] && cards[frontCi].clr > 0.3);
     put(sel, 'opacity', showSel ? '1' : '0');
-    if (frontPose){
+    if (frontPose && F.show === 'front only'){
       const W = Math.round(frontPose.w), H = Math.round(frontPose.h);
       put(sel, 'width', W + 'px'); put(sel, 'height', H + 'px');
       sel.style.transform = `translate3d(${(frontPose.sx - W/2).toFixed(1)}px,${(frontPose.sy - H/2).toFixed(1)}px,0)`;
@@ -1334,8 +1344,9 @@
   }
 
   kit.subscribe(applyStatic);
-  let introSkipped = false;
-  const skipIntro = () => { if (V && !introDone && introStart > 0 && introStart < Infinity){ introSkipped = true; introStart = performance.now() - 60000; } };
+  let introSkipped = false, skipAt = 0, skipIt = 0;
+  const skipIntro = () => { if (V && !introDone && !introSkipped && introStart > 0 && introStart < Infinity){
+    introSkipped = true; skipAt = performance.now(); skipIt = (skipAt - introStart)/1000; lock(false); } };
   ['keydown','wheel','touchstart','pointerdown'].forEach(t => addEventListener(t, skipIntro, { passive:true }));
   // the logo starts drawing in the centre straight away; the works only fly in once their images are decoded.
   // If they're not ready when the logo finishes, the logo simply holds in the centre until they are.
