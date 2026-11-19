@@ -50,7 +50,9 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
-  html{scrollbar-gutter:stable}   /* locking scroll during the intro must not shift the layout where scrollbars take space */
+  html{scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ink) 26%,transparent) var(--bg)}   /* quiet, theme-matched scrollbar */
+  /* the intro lock blocks input instead of hiding overflow, so the scrollbar never disappears and reappears */
+  html.lenis:not(.lenis-autoToggle).lenis-stopped{overflow:visible}
   body{font-family:"Inter Tight",system-ui,sans-serif}
 
   .stage{cursor:grab;touch-action:pan-y} .stage.dragging{cursor:grabbing} .stage.dragging .card{cursor:grabbing}
@@ -770,7 +772,7 @@
     set('--line', dark ? T.darkLine : '#ececec');
     set('--wframe', dark ? T.darkFrame : '#d5d5d5'); set('--whandle', dark ? T.darkFrame : '#d5d5d5'); set('--cellline', dark ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.16)');
     set('--dummy', dark ? '#1c1c1c' : v.Dummies.fill);
-    document.querySelector('meta[name=color-scheme]') || document.head.insertAdjacentHTML('beforeend','<meta name="color-scheme" content="light dark">');
+    document.documentElement.style.colorScheme = dark ? 'dark' : 'light';   // scrollbars etc. follow the site's theme, not the OS
     ['themeToggle','dockTheme'].forEach(id => { const tt = document.getElementById(id);
     tt.innerHTML = dark ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 0 1 9.4 4a8.2 8.2 0 1 0 10.6 10.6Z"/></svg>';
     tt.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode'); tt.hidden = !T.showToggle; });
@@ -963,8 +965,12 @@
   document.getElementById('dockHome').addEventListener('click', e => { e.preventDefault(); lenis ? lenis.scrollTo(0, { duration: 1.2 }) : scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' }); });
 
   function startIntro(){ introStart = performance.now(); introDone = false; lenis ? lenis.scrollTo(0, { immediate:true, force:true }) : scrollTo(0,0); flightRank = null; stage.classList.remove('ready'); centre.classList.remove('in'); stage.classList.remove('in'); }
+  let scrollLocked = false;
+  const blockScroll = e => { if (scrollLocked && e.cancelable) e.preventDefault(); };
+  if (!lenis){ addEventListener('wheel', blockScroll, { passive:false }); addEventListener('touchmove', blockScroll, { passive:false }); }   // Lenis blocks these itself when stopped
+  addEventListener('keydown', e => { if (scrollLocked && /^( |PageDown|PageUp|ArrowDown|ArrowUp|Home|End)$/.test(e.key) && !e.target.closest('input,textarea,select,[contenteditable]')) e.preventDefault(); });
   function lock(on){
-    document.documentElement.style.overflow = on ? 'hidden' : '';
+    scrollLocked = on;
     if (lenis){ if (on && !lenis.isStopped) lenis.stop(); else if (!on && lenis.isStopped) lenis.start(); }
   }
 
