@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tejas Rajagopal — Brand designer for fintech, AI and crypto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/styles.css">
+<link rel="stylesheet" href="vendor/lenis.css">
+<style>
+  @font-face{font-family:"JejuMyeongjo";src:url(fonts/JejuMyeongjo.woff) format("woff");font-weight:400;font-display:swap}
+  @font-face{font-family:"Geist Mono";src:url(fonts/GeistMono-Light.woff2) format("woff2");font-weight:300;font-display:swap}
+  @font-face{font-family:"Geist Mono";src:url(fonts/GeistMono-Regular.woff2) format("woff2");font-weight:400;font-display:swap}
+  @font-face{font-family:"Geist Mono";src:url(fonts/GeistMono-Medium.woff2) format("woff2");font-weight:500;font-display:swap}
+  @font-face{font-family:"Geist Pixel";src:url(fonts/GeistPixel-Square.woff2) format("woff2");font-weight:400;font-display:swap}
+  :root{
+    --bg:#ffffff; --ink:#141414; --mute:#7a766f; --line:#ececec; --wframe:#dcdcdc; --whandle:#cfcfcf; --radius:6px; --name:45; --hover:1.06;
+    --fc:#000; --fc2:#000; --fa:135deg; --fbw:1; --htl:#000; --htr:#000; --hbl:#000; --hbr:#000; --hs:8; --ho:1; --lc:#8a8a8a; --ls:10; --lg:6;
+    --dummy:#e3e3e3; --dummyInk:#9a9a9a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  body{font-family:"Inter Tight",system-ui,sans-serif}
+
+  .stage{cursor:grab;touch-action:pan-y} .stage.dragging{cursor:grabbing} .stage.dragging .card{cursor:grabbing}
+  .orbit-section{height:420vh;position:relative}
+  .stage{position:sticky;top:0;height:100vh;overflow:hidden}
+  .ring{position:absolute;inset:0;pointer-events:none;z-index:1}
+  .grid-head{position:absolute;left:50%;top:0;z-index:2;font-family:"JejuMyeongjo",serif;font-weight:400;font-size:32px;letter-spacing:-.03em;line-height:108%;
+    opacity:0;pointer-events:none;white-space:nowrap}
+  /* case view */
+  .case-bg{position:fixed;inset:0;background:var(--bg);opacity:0;z-index:300;pointer-events:none}
+  .case-bg.open{pointer-events:auto}
+  .case-info{position:fixed;left:50%;z-index:450;display:flex;gap:16px;align-items:baseline;transform:translateX(-50%);opacity:0;pointer-events:none;
+    font-family:"Geist Mono",monospace;font-size:13px;color:color-mix(in srgb,var(--ink) 70%,transparent);white-space:nowrap}
+  .case-info b{font-family:"JejuMyeongjo",serif;font-weight:400;font-size:24px;letter-spacing:-.03em;color:var(--ink)}
+  .case-close{position:fixed;top:20px;left:20px;z-index:460;font-family:"Geist Mono",monospace;font-size:13px;text-transform:uppercase;
+    background:none;border:0;color:var(--ink);cursor:pointer;padding:12px;margin:-12px;opacity:0;pointer-events:none;transition:transform .15s var(--ease-out-quad)}
+  .case-close:active{transform:scale(.97)} .case-close:focus-visible{outline:1px solid var(--ink);outline-offset:2px}
+
+  /* card = media + frame overlay */
+  .card{position:absolute;left:50%;top:50%;pointer-events:auto;cursor:inherit;will-change:transform,opacity;--s:1;--fo:1;--sh:0}
+  /* shadow lives on a pseudo-element and only its opacity animates (compositor-only, no per-frame repaint) */
+  .card::before{content:"";position:absolute;inset:0;box-shadow:0 30px 60px -28px rgba(20,16,10,.9);opacity:var(--sh);pointer-events:none}
+  .card.hidden{display:none}
+  .media{position:absolute;inset:0;border-radius:var(--radius);overflow:hidden;background:var(--dummy)}
+  .media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;
+    user-select:none;-webkit-user-drag:none;transition:transform .2s ease}
+  :root{--ease-out-expo:cubic-bezier(.19,1,.22,1);--ease-out-quad:cubic-bezier(.25,.46,.45,.94);--ease-in-out-cubic:cubic-bezier(.645,.045,.355,1)}
+  @media (hover:hover) and (pointer:fine){ .card:hover .media img{transform:scale(var(--hover))} }
+  /* press feedback: felt, not seen. Applied to children because the card's own transform is driven per frame */
+  .card .media,.card .frame{transition:transform .15s var(--ease-out-quad)}
+  .card:active .media,.card:active .frame{transform:scale(.98)}
+  .media .dlabel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:"Geist Mono",monospace;font-size:calc(11px / var(--s));letter-spacing:.06em;color:var(--dummyInk);text-transform:uppercase}
+
+  .frame{position:absolute;inset:0;pointer-events:none;opacity:var(--fo)}
+  .stage:not(.ready) .frame{transition:opacity .4s ease}
+  .card-select{position:absolute;left:50%;top:50%;pointer-events:none;--s:1;--fo:1;opacity:0}
+  .stage:not(.ready) .card-select{transition:opacity .4s ease}
+  .frame b{position:absolute;inset:0;border-radius:var(--radius);padding:calc(var(--fbw) * 1px / var(--s));
+    background:linear-gradient(var(--fa), var(--fc), var(--fc2));
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+    mask:linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)}
+  .frame i{position:absolute;width:calc(var(--hs) * 1px / var(--s));height:calc(var(--hs) * 1px / var(--s));
+    --o:calc(var(--hs) * var(--ho) * -1px / var(--s))}
+  .frame i.tl{top:var(--o);left:var(--o);background:var(--htl)} .frame i.tr{top:var(--o);right:var(--o);background:var(--htr)}
+  .frame i.bl{bottom:var(--o);left:var(--o);background:var(--hbl)} .frame i.br{bottom:var(--o);right:var(--o);background:var(--hbr)}
+  .frame span{position:absolute;left:0;bottom:100%;margin-bottom:calc(var(--lg) * 1px / var(--s));
+    font-family:"Inter Tight",system-ui,sans-serif;font-weight:500;font-size:calc(var(--ls) * 1px / var(--s));color:var(--lc);white-space:nowrap;line-height:1}
+  .noHandles .frame i, .noLabel .frame span{display:none}
+  .noBorder .frame b{display:none}
+
+  .centre{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:50;text-align:center;
+    width:min(92vw,900px);pointer-events:none;will-change:opacity,transform,filter}
+  .centre{display:flex;flex-direction:column;align-items:center;gap:48px;width:min(92vw,469px)}
+  .c-top{display:flex;flex-direction:column;align-items:center;gap:40px;align-self:stretch}
+  .c-text{display:flex;flex-direction:column;align-items:center;gap:40px;width:362px;max-width:100%}
+  .c-name{display:flex;flex-direction:column;align-items:center;gap:20px;width:454px;max-width:92vw}
+  /* a soft pool of page colour under the text, so contrast never depends on which picture passes behind */
+  .centre::before,.statement-text::before{content:"";position:absolute;inset:-56px -88px;z-index:-1;pointer-events:none;
+    background:radial-gradient(closest-side,var(--bg) 72%,color-mix(in srgb,var(--bg) 0%,transparent))}
+  /* the hero's colour pool only appears with the text, so it never hides the intro logo */
+  .centre::before{opacity:0;transition:opacity .6s ease} .centre.in::before{opacity:1}
+  .mark{width:97.55px;height:auto;display:block}
+  .mark path{fill:var(--ink)}
+  h1{font-family:"JejuMyeongjo",serif;font-weight:400;font-size:min(calc(var(--name) * 1px),11vw);line-height:108%;letter-spacing:-.03em;text-transform:capitalize;color:var(--ink);white-space:nowrap}
+  .sub{font-family:"Geist Mono",monospace;font-weight:300;font-size:16px;line-height:145%;text-align:center;text-transform:capitalize;
+       color:color-mix(in srgb,var(--ink) 70%,transparent);align-self:stretch}
+  .years{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;align-self:stretch}
+  .years small{font-family:"Geist Pixel","Geist Mono",monospace;font-size:14px;line-height:118%;letter-spacing:.02em;text-transform:uppercase;
+       color:color-mix(in srgb,var(--ink) 70%,transparent)}
+  .logos{display:flex;align-items:center;justify-content:space-between;width:338.3px;height:16.35px;color:var(--ink);
+       font-family:"Inter Tight",system-ui,sans-serif;font-weight:700;font-size:12px;letter-spacing:-.01em}
+  .logos img{height:16.35px;width:auto;display:block}
+  .logos span:nth-child(3){font-style:italic}
+  .cta{font-family:"Geist Mono",monospace;font-weight:500;font-size:16px;line-height:130%;text-align:center;text-decoration:underline;
+       text-underline-offset:3px;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 70%,transparent);pointer-events:auto;align-self:stretch}
+  .cta{display:inline-block;transition:color .15s ease,transform .15s var(--ease-out-quad);position:relative}
+  .cta::before{content:"";position:absolute;inset:-14px -12px}   /* ≥44px tap area */
+  .cta:hover{color:var(--ink)} .cta:active{transform:scale(.97)}
+  .cta:focus-visible{outline:1px solid var(--ink);outline-offset:4px}
+  .caption{font-size:12px !important;position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:200;
+    font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    display:flex;gap:10px;align-items:center;white-space:nowrap}
+  .caption[hidden]{display:none}
+  .caption .fig{color:var(--mute)}
+  /* caption crossfade with a small directional hint: exits up fast, enters from below */
+  .caption .name,.caption .fig{display:inline-block;transition:opacity .22s var(--ease-out-expo),transform .22s var(--ease-out-expo),filter .22s var(--ease-out-expo)}
+  .caption.out .name,.caption.out .fig{opacity:0;transform:translateY(-4px);filter:blur(2px);transition-duration:.12s;transition-timing-function:var(--ease-out-quad)}
+  .caption.pre .name,.caption.pre .fig{opacity:0;transform:translateY(4px);filter:blur(2px);transition:none}
+  .progress{position:absolute;left:50%;top:22px;transform:translateX(-50%);z-index:200;width:120px;height:1px;background:color-mix(in srgb,var(--ink) 14%,transparent)}
+  .progress i{display:block;height:100%;width:100%;background:var(--ink);transform:scaleX(0);transform-origin:left center}
+  .hint{position:absolute;left:16px;bottom:18px;z-index:200;font-family:"Geist Mono",monospace;font-size:12px;color:var(--mute);letter-spacing:.02em}
+  .intro-mark{position:absolute;left:50%;top:50%;width:97.55px;overflow:visible;z-index:80;pointer-events:none;transform-origin:50% 50%;will-change:transform,opacity}
+  .intro-mark path{fill:var(--ink);stroke:none}
+  /* text entrance: one orchestrated, staggered rise (CSS transitions, not per-frame JS) */
+  /* hero text: staggered by importance — the name leads with the most travel and time; the logo row only fades */
+  .centre .rise{opacity:0;transform:translateY(var(--y,8px));
+    transition:opacity var(--dur,.7s) var(--ease-out-expo) var(--d,0s),transform var(--dur,.7s) var(--ease-out-expo) var(--d,0s)}
+  .centre.in .rise{opacity:1;transform:none}
+  .chrome{opacity:0;transition:opacity .6s ease .5s}
+  .stage.in .chrome{opacity:1}
+  /* reduced motion: gentler, not zero — keep the fades, drop the movement */
+  @media (prefers-reduced-motion: reduce){ .centre .rise{transform:none;transition:opacity .4s ease var(--d,0s)} }
+
+  /* statement: pinned while its words read in, then the work slides up over it */
+  /* statement lives in the pinned stage, inside the orbit */
+  .statement-text{position:absolute;left:50%;top:50%;z-index:150;opacity:0;pointer-events:none;transform:translate(-50%,-50%);width:min(425px,86vw);font-family:"JejuMyeongjo",serif;font-weight:400;font-size:34px;line-height:138%;letter-spacing:-.03em;
+    text-align:justify;text-transform:none;color:var(--ink)}
+  /* gradient lives on an inner block so it paints above the colour pool behind the text */
+  .statement-text .st-g{position:absolute;inset:0;pointer-events:none;background:radial-gradient(95.97% 27.64% at 15.76% 8.41%,#F58E3F 0%,#ED583E 29.25%,#F06F8A 51.47%,#8D5FB7 62.81%,#244EE7 100%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .statement-text .st i{font-style:normal}
+  .statement-text .st > span.g{-webkit-text-fill-color:transparent;color:transparent} .statement-text .st-g > span{visibility:hidden} .statement-text .st-g > span.g{visibility:visible}
+  /* work grid */
+  /* the grid rises over the pinned stage; transparent so the orbit cards can land in its frames */
+  .works{position:relative;z-index:5;margin-top:-25vh}   /* starts rising just as the last cards clear */
+  .wcell{will-change:transform,opacity}
+  .wg{display:grid;grid-template-columns:1fr 1fr}
+  .wcell{display:flex;flex-direction:column;align-items:center;gap:30px;padding:43px 3.7vw 33px;border-bottom:.5px solid var(--cellline)}
+  .wcell:nth-child(odd){border-right:.5px solid var(--cellline)}
+  .wcell[hidden]{display:none}
+  .wframe{position:relative;width:100%;aspect-ratio:614/338;border:1px solid var(--wframe)}
+  .wframe .wimg{position:absolute;inset:0;overflow:hidden}
+  .wframe img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s ease}
+  @media (hover:hover) and (pointer:fine){ .wcell:hover .wframe img{transform:scale(1.02)} }
+  .wframe i{position:absolute;width:8px;height:8px;background:var(--whandle)}
+  /* handles sit just outside each corner, touching it diagonally */
+  .wframe i:nth-of-type(1){top:-9px;left:-9px} .wframe i:nth-of-type(2){top:-9px;right:-9px}
+  .wframe i:nth-of-type(3){bottom:-9px;left:-9px} .wframe i:nth-of-type(4){bottom:-9px;right:-9px}
+  .wtitle{font-family:"JejuMyeongjo",serif;font-weight:400;font-size:26px;letter-spacing:-.03em;line-height:138%}
+  .wempty{grid-column:1/-1;padding:120px 0;text-align:center;font-family:"Geist Mono",monospace;font-size:14px;color:color-mix(in srgb,var(--ink) 60%,transparent)}
+  .works-end{height:200px}
+  @media (max-width:800px){ .wg{grid-template-columns:1fr} .wcell:nth-child(odd){border-right:0} }
+  /* dock */
+  .dock{position:fixed;left:50%;bottom:77px;z-index:200;display:flex;align-items:stretch;height:60px;background:var(--bg);border:1px solid var(--wframe);
+    transform:translate(-50%,12px);opacity:0;pointer-events:none;transition:opacity .3s var(--ease-out-expo),transform .4s var(--ease-out-expo)}
+  .dock.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .dock-logo{display:flex;align-items:center;padding:0 40px 0 20px}
+  .dock-logo svg{width:60px;height:auto;display:block} .dock-logo path{fill:var(--ink)}
+  .dock-tabs{display:flex;align-items:center;gap:30px;padding-right:28px}
+  .dock-tabs button{background:none;border:0;padding:8px 0;cursor:pointer;font-family:"Geist Mono",monospace;font-size:16px;text-transform:uppercase;
+    color:color-mix(in srgb,var(--ink) 70%,transparent);transition:color .15s ease}
+  .dock-tabs button:hover,.dock-tabs button[aria-pressed="true"]{color:var(--ink)}
+  .dock-tabs button[aria-pressed="true"]{text-decoration:underline;text-underline-offset:3px}
+  .dock-cta{display:flex;align-items:center;padding:0 29px;margin:-1px -1px -1px 0;background:var(--ink);color:var(--bg);text-decoration:none;
+    font-family:"JejuMyeongjo",serif;font-size:20px;letter-spacing:-.03em;transition:transform .15s var(--ease-out-quad)}
+  .dock-cta:active{transform:scale(.97)}
+  .dock button:focus-visible,.dock a:focus-visible{outline:1px solid var(--ink);outline-offset:3px}
+  /* nav hover: letters wave through the gradient one after another, then settle back to their own colour */
+  .nav-wave i{font-style:normal}
+  #name{pointer-events:auto;cursor:default}   /* the name takes the hover wave too */
+  #name i{text-transform:none}   /* capitalize would treat every letter as a word once split */
+  .nav-wave.waving i{animation:navWave .75s cubic-bezier(.25,.46,.45,.94) calc(var(--i) * 32ms) both}
+  @keyframes navWave{18%{color:#F58E3F} 34%{color:#ED583E} 50%{color:#F06F8A} 66%{color:#8D5FB7} 82%{color:#244EE7}}
+  @media (prefers-reduced-motion: reduce){ .nav-wave.waving i{animation:none} }
+  /* theme change: a soft blur over the switch */
+  .pixel-wrap{position:fixed;inset:0;z-index:1000;pointer-events:none;opacity:0;
+    -webkit-backdrop-filter:blur(var(--tb,12px));backdrop-filter:blur(var(--tb,12px));transition:opacity .25s cubic-bezier(.645,.045,.355,1)}
+  .pixel-wrap.on{opacity:1}
+  .dock-right{display:contents} .dock-about,.dock-theme{display:none}
+  /* ---- desktop: the dock becomes a top bar once the work is on screen */
+  @media (min-width:701px){
+    html:not(.m-list) .works{padding-top:64px}
+    html:not(.m-list) .dock{left:0;right:0;top:0;bottom:auto;width:100%;height:64px;border:0;border-bottom:1px solid var(--wframe);overflow:hidden;
+      transform:translateY(-100%)}
+    html:not(.m-list) .dock.show{transform:none}
+    html:not(.m-list) .dock-logo{padding:0 28px 0 30px} .dock-logo svg{width:59px}
+    /* the filter tabs sit in a tab that rises out of the bar's bottom edge */
+    html:not(.m-list) .dock-tabs{align-self:flex-end;height:56px;gap:32px;padding:0 36px;border:1px solid var(--wframe);border-bottom:0;border-radius:12px 12px 0 0}
+    html:not(.m-list) .dock-tabs button,html:not(.m-list) .dock-about{font-family:"Geist Mono",monospace;font-size:17px;letter-spacing:-.03em;text-transform:uppercase;min-height:44px}
+    html:not(.m-list) .dock-tabs button{color:color-mix(in srgb,var(--ink) 60%,transparent)}
+    html:not(.m-list) .dock-right{display:flex;align-items:stretch;margin-left:auto}
+    html:not(.m-list) .dock-theme{display:grid;place-items:center;align-self:center;width:44px;height:44px;margin-right:8px;border:0;background:none;cursor:pointer;color:var(--mute);transition:color .15s ease}
+    html:not(.m-list) .dock-theme svg{width:20px;height:20px;display:block;transition:transform .3s var(--ease-out-expo)}
+    html:not(.m-list) .dock-theme:hover{color:var(--ink)} .dock-theme:active svg{transform:scale(.9) rotate(-15deg)}
+    html:not(.m-list) .dock-about{display:flex;align-items:center;padding:0 37px 0 12px;color:color-mix(in srgb,var(--ink) 70%,transparent);text-decoration:none;transition:color .15s ease}
+    html:not(.m-list) .dock-about:hover{color:var(--ink)}
+    /* black key, cropped by the bar on the right and bottom like the frame */
+    html:not(.m-list) .dock-cta{align-self:flex-end;align-items:flex-start;width:214px;height:74px;margin:0 -45px -20px 0;padding:14px 0 0 34px;border-radius:12px;
+      background:#000;color:#fff;font-size:21px;box-shadow:inset 0 2px 11.7px rgba(37,79,232,.74),inset 2px -2px 12.5px #F48B3F}
+    html:not(.m-list) .dock-cta:focus-visible{outline:0} .dock-cta:focus-visible span{outline:1px solid #fff;outline-offset:4px}
+    html:not(.m-list) .edge-blur{display:none}
+    html:not(.m-list) .theme-toggle,html:not(.m-list) .motion-toggle{transition:color .15s ease,opacity .25s ease,visibility 0s}
+    html.bar-on:not(.m-list) .theme-toggle,html.bar-on:not(.m-list) .motion-toggle{opacity:0;visibility:hidden;transition:opacity .2s ease,visibility 0s .2s}
+  }
+  /* hero: a line under the text with a colour run travelling down it, three times */
+  /* sits under the orbit, so cards pass over it rather than being cut by it */
+  .hero-cue{position:absolute;left:50%;top:calc(50% + 252px);z-index:1;width:1px;height:128px;margin-left:-.5px;background:var(--wframe);overflow:hidden;
+    opacity:0;transition:opacity .8s ease .4s}
+  .stage.in .hero-cue{opacity:var(--co,1)}
+  /* a soft-ended gradient run that keeps travelling down the line (Pause stops it) */
+  .hero-cue i,.scroll-cue i::after{position:absolute;left:0;top:0;width:1px;height:60%;
+    background:linear-gradient(transparent,#F58E3F 18%,#ED583E 34%,#F06F8A 50%,#8D5FB7 64%,#244EE7 82%,transparent);
+    transform:translateY(-100%);animation:heroCue 2.2s cubic-bezier(.45,.05,.55,.95) 1s infinite}
+  @keyframes heroCue{0%{transform:translateY(-85%)} 100%{transform:translateY(152%)}}
+  .paused .hero-cue i{animation-play-state:paused}
+  @media (prefers-reduced-motion: reduce){ .hero-cue i{animation:none;transform:translateY(30%)} }
+  @media (max-width:700px){ .hero-cue{display:none} }
+  .m-list .hero-cue{display:none}
+  /* soft blur at the bottom edge while the work is on screen */
+  .edge-blur{position:fixed;left:0;right:0;bottom:0;height:240px;z-index:150;pointer-events:none;opacity:0;transition:opacity .4s ease;
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+    -webkit-mask-image:linear-gradient(to top,#000 30%,transparent);mask-image:linear-gradient(to top,#000 30%,transparent)}
+  .edge-blur.show{opacity:1}
+  /* small UI text sits on a solid chip so it stays readable over whatever picture passes behind */
+  .caption,.hint,.theme-toggle,.motion-toggle{background:var(--bg)!important}
+  .caption,.hint{padding:6px 10px}
+  .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  .card:focus-visible{outline:2px solid var(--ink);outline-offset:6px}
+  .motion-toggle{position:fixed;top:24px;left:72px;z-index:300;background:none;border:0;padding:12px;margin:-12px;cursor:pointer;
+    font-family:"Geist Mono",monospace;font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:var(--mute);transition:color .15s ease}
+  .motion-toggle:hover{color:var(--ink)} .motion-toggle:focus-visible{outline:1px solid var(--ink);outline-offset:2px}
+  .paused .scroll-cue i::after{animation-play-state:paused}
+  /* theme toggle */
+  .theme-toggle{position:fixed;top:12px;left:12px;z-index:300;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:50%;cursor:pointer;
+    font-family:"Geist Mono",monospace;font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:var(--mute);transition:color .15s ease}
+  .theme-toggle svg{width:20px;height:20px;display:block;transition:transform .3s var(--ease-out-expo)}
+  .theme-toggle:active svg{transform:scale(.9) rotate(-15deg)}
+  .theme-toggle:hover{color:var(--ink)} .theme-toggle:focus-visible{outline:1px solid var(--ink);outline-offset:2px}
+  /* ---- phones */
+  @media (max-width:700px){
+    /* iPhone 16 frames: logo → 47 → [name/sub → 35 → years → 35 → cta] */
+    h1{font-size:40px}
+    .mark{width:75.38px}
+    .centre{gap:32px;width:min(362px,92vw)} .c-top{gap:48px} .c-text{gap:32px;width:281px} .c-name{gap:24px;width:281px}
+    .sub{font-size:16px} .years{gap:8px} .years small{font-size:12px} .logos{width:281px;height:auto;font-size:12px} .cta{font-size:14px}
+    .statement-text{font-size:21px;line-height:138%;text-align:justify;width:225px}
+    .wcell{padding:40px 6vw 32px;gap:22px} .wtitle{font-size:20px}
+    .dock{bottom:16px;height:52px;max-width:94vw} .dock-logo{padding:0 12px} .dock-logo svg{width:44px}
+    .dock-tabs{gap:6px;padding-right:8px} .dock-tabs button{font-size:14px;min-height:44px;padding:0 6px} .dock-cta{font-size:16px;padding:0 14px;white-space:nowrap}
+    .edge-blur{height:150px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+  }
+  @media (hover:none){ .hint{display:none} }
+  /* ---- phone list layout: no orbit — hero, a scroll cue, then the work with a bottom bar */
+  .scroll-cue{display:none}
+  .m-list .ring,.m-list .statement-text,.m-list .caption,.m-list .hint,.m-list .progress{display:none}
+  .m-list .centre{top:60px}
+  .m-list h1{font-size:44px}
+  @media (max-width:700px){ .m-list h1{white-space:normal;width:6.2em;margin:0 auto} }   /* two lines on phones only */
+  .m-list .sub{font-size:16px}
+  .m-list .scroll-cue{display:flex;flex-direction:column;align-items:center;gap:66px;position:absolute;left:50%;bottom:58px;transform:translateX(-50%);z-index:2;
+    font-family:"Geist Mono",monospace;font-size:14px;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 70%,transparent);white-space:nowrap;
+    opacity:0;transition:opacity .6s ease .6s}
+  .m-list .stage.in .scroll-cue{opacity:1}
+  /* the line: a quiet travelling highlight that says "keep going" (constant motion → linear) */
+  .scroll-cue i{position:relative;display:block;width:1px;height:215px;background:var(--wframe);overflow:hidden}
+  .scroll-cue i::after{content:""}
+  @keyframes cue{to{transform:translateY(250%)}}
+  @media (prefers-reduced-motion: reduce){ .scroll-cue i::after{animation:none;display:none} }
+  .m-list .works{margin-top:0}
+  .m-list .wcell{padding:30px 42px 22px;gap:18px}
+  .m-list .wtitle{font-size:14px}
+  .m-list .dock{left:0;right:0;bottom:0;max-width:none;width:100%;height:calc(72px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);
+    border:0;border-top:1px solid var(--wframe);transform:translateY(12px)}
+  .m-list .dock.show{transform:none}
+  .m-list .dock-logo{display:none}
+  .m-list .dock-tabs{gap:4px;padding:0 6px}
+  .m-list .dock-tabs button{font-size:16px;min-height:48px;padding:0 8px}
+  .m-list .dock-cta{margin:0 0 0 auto;border-radius:16px 0 0 0;padding:0 20px;font-size:18px}
+  .m-list .edge-blur{height:120px}
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark mode"></button>
+<button class="motion-toggle" id="motionToggle" type="button" aria-pressed="false">Pause</button>
+<main id="main">
+<section class="orbit-section" id="orbit" aria-label="Introduction">
+  <div class="stage" id="stage">
+    <div class="progress" hidden><i id="bar"></i></div>
+    <svg class="intro-mark" id="introMark" viewBox="0 0 98 50" aria-hidden="true" focusable="false">
+      <path class="m-ring" d="M48.7745 49.9311C75.7119 49.9311 97.549 38.7537 97.549 24.9656C97.549 11.1775 75.7119 0 48.7745 0C21.8371 0 0 11.1775 0 24.9656C0 38.7537 21.8371 49.9311 48.7745 49.9311ZM92.2885 24.9656C92.2885 37.2405 72.8066 47.1912 48.7745 47.1912C24.7423 47.1912 5.2604 37.2405 5.2604 24.9656C5.2604 12.6908 24.7423 2.74006 48.7745 2.74006C72.8066 2.74006 92.2885 12.6908 92.2885 24.9656Z" fill-rule="evenodd" pathLength="1"/><path class="m-swirl" d="M40.8355 13.3674C43.5762 12.2306 46.607 12.0072 49.4449 12.5072C51.8654 12.9333 53.9115 14.0935 55.7284 15.1236C56.2202 15.4025 56.6953 15.6719 57.1564 15.9146C60.5467 17.699 63.9082 19.4594 67.3627 20.805L68.4664 21.2192C69.0416 21.4266 69.6189 21.6215 70.1997 21.8017C75.0103 23.2928 80.1317 24.0744 85.2039 24.0744H86.5268L85.3926 27.3478H85.2039C80.2659 27.3478 74.2616 26.3279 69.4239 24.9638C69.0475 24.8576 68.6409 25.0183 68.4284 25.3579C65.5685 29.9276 61.0172 33.5165 56.1492 35.4778C52.1044 37.1069 47.4914 38.1057 42.9436 37.494C38.3368 36.8738 34.0659 34.7961 30.5075 32.1312C29.9773 31.7344 29.47 31.3452 28.9776 30.9675C26.3824 28.9766 24.2011 27.3032 21.2587 26.4941L20.9165 26.4046C18.1737 25.727 15.2581 25.6691 12.335 25.9822L10.5199 26.1767L11.7983 22.7476L11.9862 22.7278C15.1661 22.3873 18.485 22.4327 21.7016 23.2273C25.5402 24.176 28.3909 26.3753 31.0766 28.4473C31.5444 28.8082 32.0073 29.1653 32.4694 29.5113L32.7736 29.736C35.9332 32.0399 39.5783 33.7383 43.3803 34.2502C47.1897 34.7625 51.2122 33.9377 54.9259 32.442C58.9977 30.8015 62.6786 28.0243 65.1279 24.4484C65.4034 24.0462 65.2275 23.4777 64.7412 23.2727C61.5841 21.9415 58.5476 20.3455 55.6319 18.8108C54.9929 18.4745 54.4038 18.1423 53.8478 17.8287L53.7994 17.8014C53.2273 17.4787 52.6901 17.1764 52.1586 16.9039C51.0981 16.3602 50.071 15.9406 48.8775 15.7305C46.5017 15.312 44.0316 15.534 41.8868 16.4768L41.7229 16.5505C41.3557 16.7208 41.0043 16.9164 40.6747 17.136L40.6491 17.1538C38.2349 18.7724 37.3532 21.7317 38.7503 24.0865C39.2717 24.965 40.1502 25.4885 41.3183 25.7066C42.5092 25.929 43.8807 25.8011 45.076 25.461C46.9713 24.921 48.5958 23.8064 49.1089 22.3806L49.1724 22.2027L49.36 22.1807L52.8065 21.7711L52.1885 23.4881L52.1873 23.492C51.1077 26.2673 48.2887 27.9494 45.9727 28.6091C44.41 29.0539 42.5152 29.2596 40.7173 28.9238C38.9546 28.5946 37.1784 27.7156 36.0427 25.931L36.0404 25.9275L35.9381 25.7609L35.9354 25.7566C33.4851 21.6268 35.2563 16.8283 38.8258 14.435C39.3815 14.0617 39.9684 13.7444 40.5712 13.4802L40.8355 13.3674Z" pathLength="1"/>
+    </svg>
+    <p class="statement-text" id="statementText"></p>
+    <div class="scroll-cue" aria-hidden="true"><i></i><span>Scroll down for works</span></div>
+    <div class="centre" id="centre">
+      <div class="c-top">
+        <svg class="mark" viewBox="0 0 98 50" aria-hidden="true"><path d="M48.7745 49.9311C75.7119 49.9311 97.549 38.7537 97.549 24.9656C97.549 11.1775 75.7119 0 48.7745 0C21.8371 0 0 11.1775 0 24.9656C0 38.7537 21.8371 49.9311 48.7745 49.9311ZM92.2885 24.9656C92.2885 37.2405 72.8066 47.1912 48.7745 47.1912C24.7423 47.1912 5.2604 37.2405 5.2604 24.9656C5.2604 12.6908 24.7423 2.74006 48.7745 2.74006C72.8066 2.74006 92.2885 12.6908 92.2885 24.9656Z" fill-rule="evenodd"/><path d="M40.8355 13.3674C43.5762 12.2306 46.607 12.0072 49.4449 12.5072C51.8654 12.9333 53.9115 14.0935 55.7284 15.1236C56.2202 15.4025 56.6953 15.6719 57.1564 15.9146C60.5467 17.699 63.9082 19.4594 67.3627 20.805L68.4664 21.2192C69.0416 21.4266 69.6189 21.6215 70.1997 21.8017C75.0103 23.2928 80.1317 24.0744 85.2039 24.0744H86.5268L85.3926 27.3478H85.2039C80.2659 27.3478 74.2616 26.3279 69.4239 24.9638C69.0475 24.8576 68.6409 25.0183 68.4284 25.3579C65.5685 29.9276 61.0172 33.5165 56.1492 35.4778C52.1044 37.1069 47.4914 38.1057 42.9436 37.494C38.3368 36.8738 34.0659 34.7961 30.5075 32.1312C29.9773 31.7344 29.47 31.3452 28.9776 30.9675C26.3824 28.9766 24.2011 27.3032 21.2587 26.4941L20.9165 26.4046C18.1737 25.727 15.2581 25.6691 12.335 25.9822L10.5199 26.1767L11.7983 22.7476L11.9862 22.7278C15.1661 22.3873 18.485 22.4327 21.7016 23.2273C25.5402 24.176 28.3909 26.3753 31.0766 28.4473C31.5444 28.8082 32.0073 29.1653 32.4694 29.5113L32.7736 29.736C35.9332 32.0399 39.5783 33.7383 43.3803 34.2502C47.1897 34.7625 51.2122 33.9377 54.9259 32.442C58.9977 30.8015 62.6786 28.0243 65.1279 24.4484C65.4034 24.0462 65.2275 23.4777 64.7412 23.2727C61.5841 21.9415 58.5476 20.3455 55.6319 18.8108C54.9929 18.4745 54.4038 18.1423 53.8478 17.8287L53.7994 17.8014C53.2273 17.4787 52.6901 17.1764 52.1586 16.9039C51.0981 16.3602 50.071 15.9406 48.8775 15.7305C46.5017 15.312 44.0316 15.534 41.8868 16.4768L41.7229 16.5505C41.3557 16.7208 41.0043 16.9164 40.6747 17.136L40.6491 17.1538C38.2349 18.7724 37.3532 21.7317 38.7503 24.0865C39.2717 24.965 40.1502 25.4885 41.3183 25.7066C42.5092 25.929 43.8807 25.8011 45.076 25.461C46.9713 24.921 48.5958 23.8064 49.1089 22.3806L49.1724 22.2027L49.36 22.1807L52.8065 21.7711L52.1885 23.4881L52.1873 23.492C51.1077 26.2673 48.2887 27.9494 45.9727 28.6091C44.41 29.0539 42.5152 29.2596 40.7173 28.9238C38.9546 28.5946 37.1784 27.7156 36.0427 25.931L36.0404 25.9275L35.9381 25.7609L35.9354 25.7566C33.4851 21.6268 35.2563 16.8283 38.8258 14.435C39.3815 14.0617 39.9684 13.7444 40.5712 13.4802L40.8355 13.3674Z"/></svg>
+        <div class="c-text">
+          <div class="c-name">
+            <h1 id="name" class="rise" style="--d:0s;--y:14px;--dur:.9s">Tejas Rajagopal</h1>
+            <p class="sub rise" id="sub" style="--d:.09s;--y:8px;--dur:.75s"></p>
+          </div>
+          <div class="years rise" id="logos" style="--d:.18s;--y:0px;--dur:.6s">
+            <small id="yearsLabel">5+ Years working at</small>
+            <div class="logos"><span>mpay</span><span>MARA</span><span>Flipkart</span><span>DEZERV</span><span>Cur</span></div>
+          </div>
+        </div>
+      </div>
+      <a class="cta rise" id="cta" href="#" style="--d:.26s;--y:4px;--dur:.6s">Get in touch</a>
+    </div>
+    <span class="hero-cue" id="heroCue" aria-hidden="true"><i></i></span>
+    <div class="ring" id="ring"></div>
+    <div class="caption chrome" id="caption"><span class="fig" id="fig">Fig. 01</span><span>—</span><span class="name" id="cname"></span></div>
+    <div class="hint chrome" id="hint">Drag to spin</div>
+  </div>
+</section>
+
+<section class="works" id="works" aria-labelledby="worksHeading"><h2 class="sr-only" id="worksHeading">Selected work</h2><div class="wg" id="worksGrid"></div><div class="works-end"></div></section>
+</main>
+<nav class="dock" id="dock" aria-label="Site">
+  <a class="dock-logo" href="#" id="dockHome" aria-label="Back to top"><svg  viewBox="0 0 98 50" aria-hidden="true"><path d="M48.7745 49.9311C75.7119 49.9311 97.549 38.7537 97.549 24.9656C97.549 11.1775 75.7119 0 48.7745 0C21.8371 0 0 11.1775 0 24.9656C0 38.7537 21.8371 49.9311 48.7745 49.9311ZM92.2885 24.9656C92.2885 37.2405 72.8066 47.1912 48.7745 47.1912C24.7423 47.1912 5.2604 37.2405 5.2604 24.9656C5.2604 12.6908 24.7423 2.74006 48.7745 2.74006C72.8066 2.74006 92.2885 12.6908 92.2885 24.9656Z" fill-rule="evenodd"/><path d="M40.8355 13.3674C43.5762 12.2306 46.607 12.0072 49.4449 12.5072C51.8654 12.9333 53.9115 14.0935 55.7284 15.1236C56.2202 15.4025 56.6953 15.6719 57.1564 15.9146C60.5467 17.699 63.9082 19.4594 67.3627 20.805L68.4664 21.2192C69.0416 21.4266 69.6189 21.6215 70.1997 21.8017C75.0103 23.2928 80.1317 24.0744 85.2039 24.0744H86.5268L85.3926 27.3478H85.2039C80.2659 27.3478 74.2616 26.3279 69.4239 24.9638C69.0475 24.8576 68.6409 25.0183 68.4284 25.3579C65.5685 29.9276 61.0172 33.5165 56.1492 35.4778C52.1044 37.1069 47.4914 38.1057 42.9436 37.494C38.3368 36.8738 34.0659 34.7961 30.5075 32.1312C29.9773 31.7344 29.47 31.3452 28.9776 30.9675C26.3824 28.9766 24.2011 27.3032 21.2587 26.4941L20.9165 26.4046C18.1737 25.727 15.2581 25.6691 12.335 25.9822L10.5199 26.1767L11.7983 22.7476L11.9862 22.7278C15.1661 22.3873 18.485 22.4327 21.7016 23.2273C25.5402 24.176 28.3909 26.3753 31.0766 28.4473C31.5444 28.8082 32.0073 29.1653 32.4694 29.5113L32.7736 29.736C35.9332 32.0399 39.5783 33.7383 43.3803 34.2502C47.1897 34.7625 51.2122 33.9377 54.9259 32.442C58.9977 30.8015 62.6786 28.0243 65.1279 24.4484C65.4034 24.0462 65.2275 23.4777 64.7412 23.2727C61.5841 21.9415 58.5476 20.3455 55.6319 18.8108C54.9929 18.4745 54.4038 18.1423 53.8478 17.8287L53.7994 17.8014C53.2273 17.4787 52.6901 17.1764 52.1586 16.9039C51.0981 16.3602 50.071 15.9406 48.8775 15.7305C46.5017 15.312 44.0316 15.534 41.8868 16.4768L41.7229 16.5505C41.3557 16.7208 41.0043 16.9164 40.6747 17.136L40.6491 17.1538C38.2349 18.7724 37.3532 21.7317 38.7503 24.0865C39.2717 24.965 40.1502 25.4885 41.3183 25.7066C42.5092 25.929 43.8807 25.8011 45.076 25.461C46.9713 24.921 48.5958 23.8064 49.1089 22.3806L49.1724 22.2027L49.36 22.1807L52.8065 21.7711L52.1885 23.4881L52.1873 23.492C51.1077 26.2673 48.2887 27.9494 45.9727 28.6091C44.41 29.0539 42.5152 29.2596 40.7173 28.9238C38.9546 28.5946 37.1784 27.7156 36.0427 25.931L36.0404 25.9275L35.9381 25.7609L35.9354 25.7566C33.4851 21.6268 35.2563 16.8283 38.8258 14.435C39.3815 14.0617 39.9684 13.7444 40.5712 13.4802L40.8355 13.3674Z"/></svg></a>
+  <div class="dock-tabs" role="group" aria-label="Filter work">
+    <button type="button" data-filter="all" aria-pressed="true">All</button>
+    <button type="button" data-filter="projects" aria-pressed="false">Projects</button>
+    <button type="button" data-filter="experiments" aria-pressed="false">Experiments</button>
+  </div>
+  <div class="dock-right">
+    <button class="dock-theme" id="dockTheme" type="button" aria-label="Switch to dark mode"></button>
+    <a class="dock-about" id="dockAbout" href="#">About me</a>
+    <a class="dock-cta" id="dockCta" href="#"><span>Get in touch</span></a>
+  </div>
+</nav>
+<div class="edge-blur" id="edgeBlur"></div>
+<div class="pixel-wrap" id="pixelWrap" aria-hidden="true"></div>
+<div class="case-bg" id="caseBg"></div>
+<div class="case-info" id="caseInfo" role="status" aria-live="polite"><span id="caseFig">Fig. 01</span><b id="caseTitle"></b></div>
+<button class="case-close" id="caseClose" type="button">Close</button>
+
+<script src="vendor/lenis.min.js"></script>
+<script src="vendor/browser.global.js"></script>
+<script>
+(() => {
+  const WORKS = [
+    ["01","Ekaant Care — Stats"],["02","Ekaant Care — App"],["03","Ekaant Care — Mark"],["04","Ekaant Care — Campaign"],
+    ["05","Timelaps"],["06","Anduro"],["07","Avant — Identity"],["08","Avant — Illustration"],
+    ["09","River — Dashboard"],["10","River — Product"],["11","River — Data viz"],["12","Wayfind"],
+    ["13","Fintech — Payments"],["14","Realised"],["15","Rewards — Patches"],["16","Paw — Mark"],["17","Home services — Booking"]
+  ];
+  const HIDDEN = { "10": true };
+  const SIZES  = { "10": 1.89 };
+  const MAX_DUMMIES = 30;
+
+  // ---------- DialKit config (defaults = Tejas's tuned values) ----------
+  const worksCfg = { _collapsed:true };
+  WORKS.forEach(([id,title]) => { worksCfg[id] = { _collapsed:true, title, size:[SIZES[id]||1,0.3,3,0.01], show:!HIDDEN[id] }; });
+
+  const cfg = {
+    Layout: {
+      radius:[1.01,0.3,1.6,0.01],
+      tilt:[36,0,70,1],
+      perspective:[4150,800,8000,50],
+      centreX:[21,-500,500,1],
+      centreY:[-182,-400,400,1],
+      startAngle:[-27,-180,180,1],
+      stacking:{ type:"select", options:[{value:"depth (pops)",label:"Depth (eased swap)"},{value:"deck (smooth)",label:"Deck (no swap)"}], default:"depth (pops)" },
+    },
+    Cards: {
+      width:[481,80,720,1],
+      aspect:{ type:"select", options:["16:9","3:2","4:3","1:1","4:5"], default:"16:9" },
+      cornerRadius:[0,0,48,1],
+      fit:{ type:"select", options:["cover","contain"], default:"cover" },
+      shadow:[0.04,0,0.8,0.01],
+      hoverZoom:[1,1,1.4,0.01],
+    },
+    Frame: {
+      show:{ type:"select", options:["always","front only","hover","never"], default:"always" },
+      border:true,
+      colour:"#cbcbcb",
+      gradient:false,
+      colourB:"#ff2a2a",
+      gradientAngle:[58,0,360,1],
+      gradientSpin:[0,-180,180,1],
+      borderWidth:[0,0,6,0.5],
+      handles:true,
+      handleSize:[7,0,24,1],
+      handlePosition:{ type:"select", options:["outside","centred","inside"], default:"centred" },
+      label:false,
+      labelText:{ type:"select", options:["frame id","title"], default:"frame id" },
+      labelColor:"#8a8a8a",
+      labelSize:[12,6,20,1],
+      labelGap:[6,0,24,1],
+      keepCrisp:true,
+    },
+    "Size by position": {
+      front:[1.24,0.3,3,0.01],
+      sides:[1.15,0.3,3,0.01],
+      back:[1,0.1,2,0.01],
+      perspectiveSize:false,
+    },
+    Depth: {
+      backOpacity:[1,0,1,0.01],
+      backBlur:[3.5,0,12,0.1],
+      backGreyscale:[0,0,1,0.01],
+      falloff:[4,0.3,4,0.05],
+    },
+    Intro: {
+      play:true,
+      replay:{ type:"action" },
+      logoDraw:[0.8,0.2,3,0.05],
+      logoHold:[0.55,0,3,0.05],
+      logoScale:[1.6,0.5,6,0.05],
+      logoStays:true,
+      flight:[1.1,0.3,2.5,0.05],
+      stagger:[60,0,200,1],
+      order:{ type:"select", options:["front first","back first","around"], default:"front first" },
+      fromScale:[2.4,1.2,5,0.05],
+      fromBlur:[5,0,12,0.5],
+      textIn:[0.7,0.1,3,0.05],
+      lockScroll:true,
+      oncePerSession:false,
+    },
+    Expand: {
+      width:[0.82,0.4,0.98,0.01],
+      openMs:[500,150,1200,10],
+      closeMs:[320,100,1000,10],
+    },
+    Dummies: {
+      count:[0,0,MAX_DUMMIES,1],
+      size:[1,0.3,3,0.01],
+      fill:"#e3e3e3",
+      labelColor:"#9a9a9a",
+      showLabel:true,
+      placement:{ type:"select", options:["after works","interleave"], default:"interleave" },
+    },
+    Mobile: {
+      _collapsed:true,
+      breakpoint:[1024,400,1600,10],   // below this width: no orbit (the phone layout)
+      cardWidth:[112,60,320,1],
+      radius:[1.38,0.4,1.8,0.01],
+      tilt:[78,0,85,1],
+      centreY:[0,-500,200,1],
+      maxWorks:[10,3,16,1],
+      textTop:[50,40,75,1],
+      blur:[0.3,0,1,0.05],
+      ctaShort:"Get in touch",
+      layout:{ type:"select", options:[{value:"list",label:"List (no orbit)"},{value:"orbit",label:"Orbit"}], default:"list" },
+    },
+    Choreography: {
+      heroOut:[0.5,0.2,1.5,0.05],
+      statementIn:[0.5,0.2,1.5,0.05],
+      read:[1.5,0.5,4,0.05],
+      exit:[0.9,0.5,3,0.05],
+      flyScale:[3,1.5,6,0.1],
+      flyStagger:[0.5,0,1.5,0.01],
+      blur:[10,0,20,0.5],
+    },
+    Scroll: {
+      smooth:true,
+      lerp:[0.1,0.02,0.5,0.005],
+      wheelMultiplier:[1,0.3,3,0.05],
+    },
+    Motion: {
+      direction:{ type:"select", options:["clockwise","counter"], default:"clockwise" },
+      autoSpeed:[3,0,30,0.5],
+      drag:true,
+      dragSensitivity:[1,0.2,3,0.05],
+      ease:[0.1,0.02,0.4,0.005],
+      maxSpeed:[3,0.5,8,0.1],
+      scrollSpin:[1,0,4,0.05],
+      mouseParallax:[0,0,3,0.05],
+    },
+    Theme: {
+      mode:{ type:"select", options:["light","dark","system"], default:"light" },
+      showToggle:true,
+      darkBackground:"#0f0f0f",
+      darkInk:"#f0eee9",
+      darkMute:"#8f8b84",
+      darkFrame:"#3a3a3a",
+      darkLine:"#232323",
+    },
+    Text: {
+      name:"Tejas Rajagopal",
+      nameSize:[45,24,200,1],
+      subtitle:"Brand-led generalist designer for fintech, AI and crypto. A few favourites from the archive.",
+      showCaption:false,
+      showLogos:true,
+      yearsLabel:"5+ Years working at",
+      ctaLabel:"Get in touch",
+      aboutLink:"#",
+      ctaLink:"mailto:",
+      showCta:true,
+      textAboveCards:true,
+      showHint:true,
+      statement:"Every startup starts as a story. I help founders tell it through brand, product and marketing, so the idea feels real from day one. These are some of my work",
+      statementLead:6,
+      background:"#ffffff",
+      ink:"#141414",
+    },
+    "Theme transition": {
+      blur:[12,2,30,1],                 // how soft the screen goes while the theme switches, px
+      duration:[0.5,0.2,1.5,0.05],      // seconds for the whole switch (blur in + blur out)
+    },
+    Responsive: {
+      scaleWithScreen:true,             // desktop: cards and orbit offsets shrink with the window
+      referenceWidth:[1440,900,2200,10],// window size the layout was designed at
+      minScale:[0.45,0.2,1,0.05],       // never shrink cards below this share of their size
+      clearText:false,                   // cards covering the hero text or the paragraph fade away
+      padding:[24,0,120,2],             // breathing room kept around the text, px
+      tolerance:[0.03,0,0.4,0.01],      // share of the text a card may cover before it starts to fade
+      fadeRange:[0.08,0.02,0.6,0.01],    // further coverage over which it fades out completely
+    },
+    Wave: {
+      startOpacity:[0.25,0,1,0.05],     // unread letters, as a share of the ink colour
+      duration:[0.8,0.2,2,0.05],        // seconds each letter takes: grey → gradient → ink
+      peak:[0.3,0.1,0.6,0.05],          // when in that time it reaches the gradient's first colour
+      scrub:[0.12,0,0.6,0.01],          // how loosely the wave front follows the scroll
+    },
+    Works: worksCfg,
+  };
+
+  // ---------- state ----------
+  let V = null;
+  let pRaw=0, p=0, pV=0, auto=0, drift=0, offset=0, offsetT=0, mx=0, my=0, mxS=0, myS=0, front=-1, baseRot=0, order=[];
+  let introStart=Infinity, introDone=false;
+  const clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
+  const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+  const easeOut=t=>1-Math.pow(1-t,3);
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const TAU=Math.PI*2;
+  const ASPECT={ "16:9":9/16, "3:2":2/3, "4:3":3/4, "1:1":1, "4:5":5/4 };
+
+  const tuneOn = location.hash === "#tune";          // the tuning panel never ships to visitors
+  if (tuneOn) DialKit.createDialRoot({ position:"top-right", theme:"light", defaultOpen: innerWidth > 800 });
+  const kit = DialKit.createDialKit("Orbit", cfg, { id:"orbit-hero-v34", persist:true,
+    onAction: path => { if (String(path).includes("replay")) startIntro(); } });
+
+  // ---------- DOM ----------
+  const $ = id => document.getElementById(id);
+  const ring=$('ring'), centre=$('centre'), section=$('orbit'), bar=$('bar');
+  const figEl=$('fig'), nameEl=$('cname'), introMark=$('introMark'), centreMark=centre.querySelector('.mark');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const stage = document.getElementById('stage'), caption = document.getElementById('caption');
+  const chromeEls = [...document.querySelectorAll('.chrome')];
+  // write-skipping: only touch a style when its (quantized) value actually changed.
+  // Per-card CSS variables recalc every descendant, so unchanged writes are pure cost.
+  function put(el, key, val){
+    const c = el._c || (el._c = {});
+    if (c[key] === val) return;
+    c[key] = val;
+    if (key[0] === '-') el.style.setProperty(key, val); else el.style[key] = val;
+  }
+  const q = (v, step) => Math.round(v/step)*step;
+  const hex = h => { h = h.replace('#',''); if (h.length === 3) h = [...h].map(x => x+x).join(''); return [0,2,4].map(i => parseInt(h.substr(i,2),16)); };
+  const mixRGB = (a, b, t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t];
+  const WAVE = ['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'].map(h => hex(h));
+  const easeOutQuint = t => 1 - Math.pow(1-t, 5);
+  const easeOutQuad = t => 1 - (1-t)*(1-t);
+  const easeInOutCubic = t => t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
+  let flightRank = null;
+
+  const easeOutExpo = t => t>=1 ? 1 : 1 - Math.pow(2, -10*t);
+  // cache the name-block mark position (reading layout every frame forces a reflow)
+  let markRect = null;
+  function measureMark(){
+    const r = centreMark.getBoundingClientRect();
+    markRect = { cx: r.left + r.width/2 - innerWidth/2, cy: r.top + r.height/2 - innerHeight/2, w: r.width };
+  }
+  addEventListener('resize', () => requestAnimationFrame(measureMark));
+  document.fonts && document.fonts.ready.then(() => requestAnimationFrame(measureMark));
+
+  function makeCard(inner, i){
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.setAttribute('aria-hidden', 'true');   // decorative: the works are listed in the grid below
+    el.innerHTML = `<div class="media">${inner}</div><div class="frame"><b></b><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i><span></span></div>`;
+    el.addEventListener('pointerenter', () => el._hover = true);
+    el.addEventListener('pointerleave', () => el._hover = false);
+    ring.appendChild(el);
+    return el;
+  }
+  const cards = [];
+  WORKS.forEach(([id]) => {
+    const i = cards.length;
+    const el = makeCard(`<img src="works/${id}.webp" alt="" draggable="false">`, i);
+    const card = { el, img:el.querySelector('img'), lbl:el.querySelector('.frame span'), id, fig:id, dummy:false };
+    cards.push(card);
+  });
+  for (let d=0; d<MAX_DUMMIES; d++){
+    const i = cards.length, n = String(d+1).padStart(2,'0');
+    const el = makeCard(`<div class="dlabel">Placeholder ${n}</div>`, i);
+    cards.push({ el, img:null, dl:el.querySelector('.dlabel'), lbl:el.querySelector('.frame span'), id:'D'+n, fig:'D'+n, dummy:true, title:'Placeholder '+n });
+  }
+
+  // one colour (or an A→B gradient) shared by stroke + handles; each handle takes the gradient's colour at its corner
+  function paintFrame(angle){
+    const F = V.Frame, r = ring.style;
+    const fc = isDark(V) ? V.Theme.darkFrame : F.colour;
+    const A = fc, B = F.gradient ? F.colourB : fc;
+    r.setProperty('--fc', A); r.setProperty('--fc2', B); r.setProperty('--fa', angle.toFixed(1)+'deg');
+    const ar = ASPECT[V.Cards.aspect] || 9/16, a = angle*Math.PI/180;
+    const dx = Math.sin(a), dy = -Math.cos(a), L = Math.abs(dx) + Math.abs(ar*dy);
+    [['--htl',0,0],['--htr',1,0],['--hbl',0,1],['--hbr',1,1]].forEach(([k,x,y]) => {
+      const t = clamp((((x-.5)*dx + (y-.5)*ar*dy) / L) + .5);
+      r.setProperty(k, F.gradient ? `color-mix(in oklab, ${B} ${(t*100).toFixed(1)}%, ${A})` : A);
+    });
+  }
+  let gAngle = null;
+
+  const sel = document.createElement('div');
+  sel.className = 'card-select';
+  sel.innerHTML = '<div class="frame"><b></b><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i><span></span></div>';
+  ring.appendChild(sel);
+  const selLbl = sel.querySelector('span');
+
+  const isMobile = v => innerWidth < (v ? v.Mobile.breakpoint : 1024);
+  let wasMobile = null;
+  addEventListener('resize', () => { if (V && isMobile(V) !== wasMobile){ applyStatic(V); } });
+
+  // ---- theme: panel sets the default; the on-page toggle overrides it for this visitor
+  let themePick = null; try { themePick = localStorage.getItem('orbitTheme'); } catch(e){}
+  const sysDark = matchMedia('(prefers-color-scheme: dark)');
+  const isDark = v => { const m = themePick || v.Theme.mode; return m === 'dark' || (m === 'system' && sysDark.matches); };
+  sysDark.addEventListener && sysDark.addEventListener('change', () => V && applyStatic(V));
+  const swapTheme = () => {
+    themePick = isDark(V) ? 'light' : 'dark';
+    try { localStorage.setItem('orbitTheme', themePick); } catch(e){}
+    applyStatic(V);
+  };
+  // light ⇄ dark: the screen blurs, the theme swaps while it's soft, then it comes back into focus
+  const pixelWrap = document.getElementById('pixelWrap');
+  let pixelBusy = false;
+  const flipTheme = () => {
+    if (pixelBusy) return;
+    if (reduce){ swapTheme(); return; }
+    pixelBusy = true;
+    const P = V['Theme transition'], half = P.duration/2;
+    pixelWrap.style.setProperty('--tb', P.blur + 'px'); pixelWrap.style.transitionDuration = half + 's';
+    pixelWrap.classList.add('on');
+    setTimeout(() => {
+      swapTheme();
+      setTimeout(() => { pixelWrap.classList.remove('on'); setTimeout(() => { pixelBusy = false; }, half*1000); }, 60);
+    }, half*1000);
+  };
+  document.getElementById('themeToggle').addEventListener('click', flipTheme);
+  document.getElementById('dockTheme').addEventListener('click', flipTheme);
+
+  const isList = v => isMobile(v) && v.Mobile.layout === 'list';
+  function applyStatic(v){
+    wasMobile = isMobile(v);
+    document.documentElement.classList.toggle('m-list', isList(v));
+    V = v;
+    const r = document.documentElement.style, F = v.Frame, Dm = v.Dummies;
+    const set = (k,val) => r.setProperty(k,val);
+    const dark = isDark(v), T = v.Theme;
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    set('--bg', dark ? T.darkBackground : v.Text.background); set('--ink', dark ? T.darkInk : v.Text.ink);
+    set('--mute', dark ? T.darkMute : '#7a766f');
+    set('--line', dark ? T.darkLine : '#ececec');
+    set('--wframe', dark ? T.darkFrame : '#d5d5d5'); set('--whandle', dark ? T.darkFrame : '#d5d5d5'); set('--cellline', dark ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.16)');
+    set('--dummy', dark ? '#1c1c1c' : v.Dummies.fill);
+    document.querySelector('meta[name=color-scheme]') || document.head.insertAdjacentHTML('beforeend','<meta name="color-scheme" content="light dark">');
+    ['themeToggle','dockTheme'].forEach(id => { const tt = document.getElementById(id);
+    tt.innerHTML = dark ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 0 1 9.4 4a8.2 8.2 0 1 0 10.6 10.6Z"/></svg>';
+    tt.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode'); tt.hidden = !T.showToggle; });
+    set('--radius', v.Cards.cornerRadius+'px'); set('--name', v.Text.nameSize); set('--hover', v.Cards.hoverZoom);
+    set('--fbw', F.borderWidth); set('--hs', F.handleSize);
+    paintFrame(F.gradientAngle);
+    set('--ho', {outside:1, centred:0.5, inside:0}[F.handlePosition]);
+    set('--lc', F.labelColor); set('--ls', F.labelSize); set('--lg', F.labelGap);
+    set('--dummy', isDark(v) ? '#1c1c1c' : Dm.fill); set('--dummyInk', isDark(v) ? '#6b6b6b' : Dm.labelColor);
+    ring.classList.toggle('noHandles', !F.handles);
+    ring.classList.toggle('noLabel', !F.label);
+    ring.classList.toggle('noBorder', !F.border);
+    const C = v.Choreography, mStart = C.heroOut*0.9 + C.statementIn + C.read + 0.1;
+    section.style.height = isList(v) ? '100vh' : ((mStart + C.exit + 1) * 100) + 'vh';     // pin long enough for: hero out → read → morph into the grid
+    $('name').textContent = v.Text.name; splitNav();
+    $('sub').textContent = v.Text.subtitle;
+    $('caption').hidden = !v.Text.showCaption;
+    $('logos').hidden = !v.Text.showLogos;
+    $('yearsLabel').textContent = v.Text.yearsLabel;
+    centre.style.zIndex = v.Text.textAboveCards ? 150 : 50;
+    flightRank = null;
+    requestAnimationFrame(measureMark);
+    $('cta').textContent = v.Text.ctaLabel; $('cta').href = v.Text.ctaLink || '#'; $('cta').hidden = !v.Text.showCta;
+    $('hint').hidden = !v.Text.showHint;
+
+    const ar = ASPECT[v.Cards.aspect] || 9/16;
+    cards.forEach((c, i) => {
+      if (c.dummy){
+        const k = i - WORKS.length;
+        c.show = k < Dm.count; c.size = Dm.size;
+        c.dl.style.display = Dm.showLabel ? '' : 'none';
+      } else {
+        const wv = v.Works[c.id];
+        c.show = wv.show; c.size = wv.size; c.title = wv.title;
+        c.img.style.objectFit = v.Cards.fit;
+      }
+      c.w = (isMobile(v) ? v.Mobile.cardWidth : v.Cards.width) * c.size; c.h = c.w * ar;
+      Object.assign(c.el.style, { width:c.w+'px', height:c.h+'px', marginLeft:(-c.w/2)+'px', marginTop:(-c.h/2)+'px' });
+      
+      c.lbl.textContent = F.labelText === 'title' ? c.title : `Frame 21472302${String(29+i).padStart(2,'0')}`;
+    });
+
+    // the next section: a plain grid of the visible works
+    const wg = document.getElementById('worksGrid');
+    wg.innerHTML = cards.filter(c => !c.dummy && c.show).map(c => {
+      const project = c.title.split('—')[0].trim();
+      return `<article class="wcell" data-cat="projects" data-id="${c.id}"><div class="wframe"><div class="wimg"><img src="works/${c.id}.webp" alt="${c.title}" loading="lazy"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">${project}</h3></article>`;
+    }).join('') + '<p class="wempty" hidden>No experiments here yet.</p>';
+    applyFilter(currentFilter, true);
+    // statement: one span per word so it can read in with scroll
+    const words = v.Text.statement.trim().split(/\s+/);
+    const firstEnd = -1;   // no static highlight: every word reads in through the wave
+    statementGrad = firstEnd + 1;
+    const wordsHtml = words.map((w,i) => i <= firstEnd ? `<span class="g">${w}</span>` : `<span>${[...w].map(ch => `<i>${ch}</i>`).join('')}</span>`).join(' ');
+    document.getElementById('statementText').innerHTML = `<span class="st">${wordsHtml}</span>`;
+    statementWords = [...document.querySelectorAll('#statementText .st > span:not(.g) > i')];
+    statementWords.forEach(c => { c._on = false; c._t0 = -1e9; });
+    $('dockCta').firstElementChild.textContent = isMobile(v) ? v.Mobile.ctaShort : v.Text.ctaLabel; $('dockAbout').href = v.Text.aboutLink || '#';
+    document.querySelector('[data-filter=projects]').textContent = isList(v) ? 'Works' : 'Projects'; splitNav(); $('dockCta').href = v.Text.ctaLink || '#';
+    if (lenis){ lenis.options.lerp = v.Scroll.lerp; lenis.options.wheelMultiplier = v.Scroll.wheelMultiplier; lenis.options.smoothWheel = v.Scroll.smooth; }
+    requestAnimationFrame(measureSections);
+
+    let ws = cards.filter(c=>!c.dummy && c.show).map(c=>cards.indexOf(c));
+    let ds = cards.filter(c=> c.dummy && c.show).map(c=>cards.indexOf(c));
+    if (isList(v)){ ws = []; ds = []; }
+    else if (isMobile(v)){
+      // phones: a lighter ring — an even spread of works, no placeholders
+      const n = Math.min(ws.length, Math.round(v.Mobile.maxWorks));
+      ws = Array.from({length:n}, (_, k) => ws[Math.floor(k * ws.length / n)]); ds = [];
+    }
+    const inRing = new Set(ws.concat(ds));
+    cards.forEach((c, i) => c.el.classList.toggle('hidden', !inRing.has(i)));
+    centre.style.top = isList(v) ? '' : isMobile(v) ? v.Mobile.textTop + '%' : '';
+    document.getElementById('statementText').style.top = isMobile(v) ? `calc(${v.Mobile.textTop}% - 6.5px)` : '';
+    if (Dm.placement === 'interleave' && ds.length && ws.length){
+      order = []; const total = ws.length + ds.length; let wi=0, di=0;
+      for (let k=0;k<total;k++){
+        const wantD = Math.floor((k+1)*ds.length/total) > di;
+        if (wantD && di<ds.length) order.push(ds[di++]); else if (wi<ws.length) order.push(ws[wi++]); else order.push(ds[di++]);
+      }
+    } else order = ws.concat(ds);
+    front = -1;
+    readScroll();
+  }
+
+  // ---------- input ----------
+  function readScroll(){
+    const total = section.offsetHeight - innerHeight;
+    pRaw = total>0 ? clamp(-section.getBoundingClientRect().top/total) : 0;
+  }
+  addEventListener('scroll', readScroll, {passive:true});
+
+  // ---- spin: drag with momentum, scroll adds a nudge; both decay back to the slow auto-rotation
+  // velocity model (same as the Osmo tornado): input adds speed, speed eases back to the auto-rotation every frame,
+  // and the ring only ever integrates speed — so drag is never jittery, whatever the pointer sampling does
+  let spin = 0, spinV = 0, spinDir = 0, lastR = 400, suppressClick = false;
+  let down = null, dragging = false;
+  stage.addEventListener('pointerdown', e => {
+    if (!V || isList(V) || !V.Motion.drag || !introDone || exId !== -1 || e.button !== 0 || e.target.closest('a,button') || scrollY > innerHeight*0.25) return;
+    down = { id:e.pointerId, x0:e.clientX, y0:e.clientY, x:e.clientX, t:performance.now() };
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!down || e.pointerId !== down.id) return;
+    if (!dragging){
+      const dx0 = e.clientX - down.x0, dy0 = e.clientY - down.y0;
+      if (Math.abs(dx0) < 5 || Math.abs(dx0) < Math.abs(dy0)) { if (Math.abs(dy0) > 8) down = null; return; }  // vertical = page scroll
+      dragging = true; stage.setPointerCapture(e.pointerId); stage.classList.add('dragging');
+    }
+    const now = performance.now(), dt = Math.max(1, now - down.t) / 1000;
+    const dx = e.clientX - down.x;
+    if (dx){
+      const M = V.Motion;
+      spinV = clamp(spinV + dx * 0.0236 * M.dragSensitivity, -M.maxSpeed, M.maxSpeed);   // ≈1.35°/s of spin per px dragged
+    }
+    down.x = e.clientX; down.t = now;
+  });
+  const endDrag = e => {
+    if (dragging){
+      if (Math.abs(spinV) > 1e-3) spinDir = Math.sign(spinV);          // auto-rotation carries on the way you flung it
+      suppressClick = true; setTimeout(() => suppressClick = false, 0);
+      stage.classList.remove('dragging');
+    }
+    dragging = false; down = null;
+  };
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+  let lastScrollY = scrollY;
+  addEventListener('scroll', () => {
+    const dy = scrollY - lastScrollY; lastScrollY = scrollY;
+    if (V && introDone && scrollY < innerHeight && dy){
+      const M = V.Motion, sd = (M.direction === 'clockwise' ? 1 : -1) * Math.sign(dy);
+      spinV = clamp(spinV + Math.abs(clamp(dy, -200, 200)) * 0.0047 * M.scrollSpin * sd, -M.maxSpeed, M.maxSpeed);
+      spinDir = sd;
+    }
+  }, {passive:true});
+  addEventListener('resize', readScroll);
+  addEventListener('pointermove', e => { mx=e.clientX/innerWidth-.5; my=e.clientY/innerHeight-.5; });
+  // ---- Lenis smooth scroll (off for reduced motion)
+  let lenis = null;
+  if (!reduce && window.Lenis){ lenis = new Lenis({ lerp: 0.1, smoothWheel: true }); }
+  const getScrollY = () => lenis ? lenis.scroll : scrollY;
+
+  // ---- sections
+  let txtClear = null, waveHead = 0, statementGrad = 0, statementWords = [], secs = { wkTop:0 }, cellRects = {}, nCells = 0, workCells = [];
+  function measureSections(){
+    const wk = document.getElementById('works'), sy0 = scrollY;
+    secs = { wkTop: wk.offsetTop };
+    cellRects = {}; nCells = 0;
+    workCells = [...document.querySelectorAll('.wcell')].filter(c => !c.hidden);
+    workCells.forEach(cell => { const t = cell.style.transform; cell.style.transform = 'none'; cell._docTop = cell.getBoundingClientRect().top + sy0; cell.style.transform = t; cell._c = {}; });
+    document.querySelectorAll('.wcell').forEach(cell => {
+      if (cell.hidden) return;
+      const r = cell.querySelector('.wimg').getBoundingClientRect();
+      cellRects[cell.dataset.id] = { left:r.left, w:r.width, h:r.height, docTop:r.top + sy0, idx:nCells++ };
+    });
+  }
+  document.fonts && document.fonts.ready.then(() => requestAnimationFrame(measureSections));
+  addEventListener('resize', () => requestAnimationFrame(measureSections));
+  let currentFilter = 'all';
+  function applyFilter(f, quiet){
+    currentFilter = f;
+    document.querySelectorAll('.dock-tabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.filter === f)));
+    let shown = 0;
+    document.querySelectorAll('.wcell').forEach(c => { const on = f === 'all' || c.dataset.cat === f; c.hidden = !on; if (on) shown++; });
+    const empty = document.querySelector('.wempty'); if (empty) empty.hidden = shown > 0;
+    if (!quiet) requestAnimationFrame(measureSections);
+  }
+  document.querySelectorAll('.dock-tabs button').forEach(b => b.addEventListener('click', () => {
+    applyFilter(b.dataset.filter);
+    const y = secs.wkTop; lenis ? lenis.scrollTo(y, { duration: 0.9 }) : scrollTo({ top: y, behavior: reduce ? 'auto' : 'smooth' });
+  }));
+  // nav labels: split into letters for the hover wave (the full word stays as the accessible name)
+  function splitNav(){
+    document.querySelectorAll('.dock-tabs button, .dock-about, #name').forEach(el => {
+      if (el.firstElementChild && el.firstElementChild.classList.contains('sr-only')) return;   // already split
+      const t = el.textContent.trim();
+      el._waveText = t; el.classList.add('nav-wave');
+      // the word stays readable to screen readers; the letters are visual only. Spaces stay real so the name can wrap.
+      el.innerHTML = `<span class="sr-only">${t}</span>` + [...t].map((ch, i) => ch === ' ' ? (el.id === 'name' ? ' ' : '<i aria-hidden="true">&nbsp;</i>') : `<i aria-hidden="true" style="--i:${i}">${ch}</i>`).join('');   // the name keeps real spaces so it can wrap; flex nav items need a visible one
+    });
+  }
+  var WAVE_SEL = '.dock-tabs button, .dock-about, #name';
+  const startWave = el => { if (reduce) return; el.classList.remove('waving'); void el.offsetWidth; el.classList.add('waving'); };
+  document.querySelectorAll(WAVE_SEL).forEach(el => {
+    el.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') startWave(el); });
+    el.addEventListener('focus', () => { if (el.matches(':focus-visible')) startWave(el); });
+    el.addEventListener('animationend', e => { if (e.target === el.lastElementChild) el.classList.remove('waving'); });
+  });
+  document.getElementById('dockHome').addEventListener('click', e => { e.preventDefault(); lenis ? lenis.scrollTo(0, { duration: 1.2 }) : scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' }); });
+
+  function startIntro(){ introStart = performance.now(); introDone = false; lenis ? lenis.scrollTo(0, { immediate:true, force:true }) : scrollTo(0,0); flightRank = null; stage.classList.remove('ready'); centre.classList.remove('in'); stage.classList.remove('in'); }
+  function lock(on){
+    document.documentElement.style.overflow = on ? 'hidden' : '';
+    if (lenis){ if (on && !lenis.isStopped) lenis.stop(); else if (!on && lenis.isStopped) lenis.start(); }
+  }
+
+  // ---- case view: a card expands from where it sits (object permanence) and returns there on close
+  // cubic-bezier solver for the iOS-sheet curve (.32,.72,0,1): steep start, long settle
+  function bezier(x1,y1,x2,y2){
+    const cx=3*x1, bx=3*(x2-x1)-cx, ax=1-cx-bx, cy=3*y1, by=3*(y2-y1)-cy, ay=1-cy-by;
+    const X=t=>((ax*t+bx)*t+cx)*t, Y=t=>((ay*t+by)*t+cy)*t, dX=t=>(3*ax*t+2*bx)*t+cx;
+    return x => { if (x<=0) return 0; if (x>=1) return 1; let t=x; for (let i=0;i<6;i++){ const d=dX(t); if (Math.abs(d)<1e-6) break; t-= (X(t)-x)/d; } return Y(clamp(t)); };
+  }
+  const easeSheet = bezier(.32,.72,0,1);
+  let exId = -1, exP = 0, exFrom = 0, exTo = 0, exT0 = 0, exDur = 0.5;
+  const statementEl = document.getElementById('statementText'), worksEl = document.getElementById('works');
+  const heroCue = document.getElementById('heroCue'), dock = document.getElementById('dock'), edgeBlur = document.getElementById('edgeBlur');
+  const caseBg = document.getElementById('caseBg'), caseInfo = document.getElementById('caseInfo'), caseClose = document.getElementById('caseClose');
+  let lastFocus = null, paused = false;
+  const motionBtn = document.getElementById('motionToggle');
+  motionBtn.addEventListener('click', () => {
+    paused = !paused;
+    motionBtn.textContent = paused ? 'Play' : 'Pause'; motionBtn.setAttribute('aria-pressed', String(paused));
+    document.documentElement.classList.toggle('paused', paused);
+  });
+  if (reduce){ motionBtn.hidden = true; }
+  // while a piece is open, everything else is inert: focus stays in the view and screen readers only see it
+  function setInertOutside(on, keep){
+    ['works','dock','themeToggle','motionToggle','centre','statementText'].forEach(id => { const e = document.getElementById(id); if (e) e.inert = on; });
+    cards.forEach((c, j) => { c.el.inert = on && j !== keep; });
+  }
+  function openCase(i){
+    if (!introDone || cards[i].dummy || scrollY > innerHeight*0.25) return;
+    if (exId !== -1 && exId !== i) return;
+    exId = i; exFrom = exP; exTo = 1; exT0 = performance.now(); exDur = V.Expand.openMs/1000;
+    document.getElementById('caseTitle').textContent = cards[i].title;
+    document.getElementById('caseFig').textContent = 'Fig. ' + cards[i].fig;
+    caseBg.classList.add('open'); lock(true); caseClose.style.pointerEvents = 'auto';
+    lastFocus = document.activeElement;
+    setInertOutside(true, i);
+    caseClose.inert = false; caseClose.style.visibility = ''; caseClose.setAttribute('aria-label', `Close ${cards[i].title}`);
+    caseClose.focus({preventScroll:true});
+  }
+  function closeCase(){
+    if (exId === -1 || exTo === 0) return;
+    exFrom = exP; exTo = 0; exT0 = performance.now(); exDur = V.Expand.closeMs/1000;   // exits are shorter
+    caseBg.classList.remove('open'); caseClose.style.pointerEvents = 'none';
+    setInertOutside(false); caseClose.inert = true; dock.inert = !dock._on;
+    if (lastFocus && lastFocus.focus) lastFocus.focus({preventScroll:true});
+  }
+  caseClose.inert = true;
+  addEventListener('keydown', e => {
+    if (e.key !== 'Tab' || exId === -1 || exTo === 0) return;
+    const card = cards[exId].el;
+    if (document.activeElement === caseClose){ e.preventDefault(); card.focus({preventScroll:true}); }
+    else if (document.activeElement === card){ e.preventDefault(); caseClose.focus({preventScroll:true}); }
+  });
+  ring.appendChild(caseBg);   // backdrop sits inside the ring's stacking context: above the other cards, below the opened one
+  caseBg.addEventListener('click', closeCase);
+  caseClose.addEventListener('click', closeCase);
+  addEventListener('keydown', e => { if (e.key === 'Escape') closeCase(); });
+
+  // ---------- frame ----------
+  let last = performance.now();
+  function frame(now){
+    requestAnimationFrame(frame);
+    if (!V) return;
+    const dt = Math.min(0.05,(now-last)/1000); last = now;
+    if (lenis) lenis.raf(now);
+    const S=V.Motion, Z=V["Size by position"], D=V.Depth, F=V.Frame, I=V.Intro;
+    const MB = V.Mobile, isMob = isMobile(V), bK = isMob ? MB.blur : 1;      // phones: smaller ring, far less blur
+    const L = isMob ? { ...V.Layout, radius: MB.radius, tilt: MB.tilt, centreX: 0, centreY: MB.centreY } : V.Layout;
+    const N = order.length, step = N ? TAU/N : 0;
+
+    // ---- intro timeline: logo draws → works fly in from the camera, front first → text
+    const it = I.play ? Math.max(0,(now - introStart)/1000) : 1e6;
+    // reduced motion: same order, opacity only — no drawing, flying, blurring or gliding
+    const LD = reduce ? 0.0001 : I.logoDraw, LH = reduce ? 0 : I.logoHold;
+    const flight = reduce ? 0.5 : I.flight, stag = reduce ? 0 : I.stagger/1000;
+    const tReveal = LD + LH;
+    if (!imagesReady && !introSkipped && I.play && it > tReveal && introStart > 0){ introStart += (it - tReveal) * 1000; }   // hold on the logo
+    const tSettled = tReveal + Math.max(0,N-1)*stag + flight;
+    const tText = tReveal + Math.max(0,N-1)*stag + flight*0.55;      // text starts as the last cards settle
+    const tEnd = Math.max(tSettled, tText + I.textIn);
+    if (!introDone && it >= tEnd + 0.4) stage.classList.add('ready');
+    if (!introDone && it >= tEnd){ introDone = true; if (exId === -1) lock(false); try{ sessionStorage.setItem('orbitIntroSeen','1'); }catch(e){} }
+    else if (!introDone) lock(I.lockScroll);
+
+    // ---- scroll + ambient
+    // ---- spin: auto-rotation (linear, constant) + drag/scroll momentum (exponential friction)
+    if (!spinDir) spinDir = S.direction === 'clockwise' ? 1 : -1;
+    const holding = paused || cards.some(c => c.el._hover || c.el === document.activeElement);
+    const cruise = (reduce || holding || !introDone || exId !== -1) ? 0 : S.autoSpeed * Math.PI/180 * spinDir;
+    spinV = lerp(spinV, cruise, 1 - Math.pow(1 - S.ease, dt*60));      // frame-rate independent lerp back to cruise
+    spin += spinV * dt;
+    const par = reduce ? 0 : S.mouseParallax;
+    const g = 0;
+    // ---- choreography (in viewport heights of scroll): hero text out → statement in → words read → cards land in the grid
+    const C = V.Choreography, cvw = innerWidth, cvh = innerHeight, wy = scrollY, u = wy / cvh;
+    const heroAway = clamp(u / C.heroOut);
+    const stIn = clamp((u - C.heroOut*0.9) / C.statementIn);
+    const readP = clamp((u - C.heroOut*0.9 - C.statementIn) / C.read);
+    const mStart = C.heroOut*0.9 + C.statementIn + C.read + 0.1;
+    const mph = clamp((u - mStart) / C.exit);                 // orbit leaves while the work rises from below
+    const exO = easeInOutCubic(mph);
+    const dir = S.direction === 'clockwise' ? 1 : -1;
+    baseRot = spin + mxS*0.35*par + L.startAngle*Math.PI/180;
+    const tilt = (L.tilt + myS*6*par) * Math.PI/180;
+    const sT=Math.sin(tilt), cT=Math.cos(tilt);
+    const span = Math.min(innerWidth, innerHeight*1.6);
+    const R = 0.5*L.radius*span, persp = L.perspective;
+    lastR = R;
+    // responsive: below the size the layout was designed at, cards and the orbit's offsets shrink with the window
+    const RS = V.Responsive;
+    const rk = (!isMob && RS.scaleWithScreen) ? clamp(span / RS.referenceWidth, RS.minScale, 1) : 1;
+    // text to keep clear: the hero block, then the paragraph, each weighted by how visible it is (rects re-read 4×/s)
+    if (RS.clearText && (!txtClear || now - txtClear.t > 250)){
+      const pad = RS.padding, list = [];
+      [[centre, 1 - heroAway], [statementEl, stIn]].forEach(([el, wt]) => {
+        if (!el || wt < 0.05) return;
+        const r = el.getBoundingClientRect(); if (!r.width) return;
+        list.push({ l: r.left - pad - innerWidth/2, r: r.right + pad - innerWidth/2, t: r.top - pad - innerHeight/2, b: r.bottom + pad - innerHeight/2,
+                    a: (r.width + 2*pad)*(r.height + 2*pad), wt });
+      });
+      txtClear = { t: now, list };
+    }
+
+    // ---- case view progress (time-based, restarts from the current value so it's interruptible)
+    if (exId !== -1){
+      const tt = clamp((now - exT0)/1000/exDur);
+      exP = lerp(exFrom, exTo, easeSheet(tt));
+      if (tt >= 1 && exTo === 0){ exId = -1; exP = 0; if (introDone) lock(false); }
+    }
+
+    // ---- first pass: ring positions, front card, flight order
+    const poses = order.map((ci,k) => {
+      const th = Math.PI/2 + k*step - baseRot;
+      const x = R*Math.cos(th), z = R*Math.sin(th);
+      const ps = persp/Math.max(120, persp - z*cT);
+      let a = (th - Math.PI/2) % TAU; if (a > Math.PI) a -= TAU; if (a <= -Math.PI) a += TAU;   // angle from the front
+      return { ci, k, a, sn: Math.sin(th), sx: x*ps + L.centreX*rk, sy: z*sT*ps + L.centreY*rk, ps };
+    });
+    let frontCi = -1, best = -2, frontPose = null;
+    poses.forEach(o => { if (o.sn > best){ best = o.sn; frontCi = o.ci; } });
+    // flight order is fixed at the intro's start so cards don't reshuffle mid-flight
+    if (!flightRank || flightRank.n !== N || flightRank.mode !== I.order){
+      const idx = poses.map((o,j)=>j);
+      if (I.order === 'front first') idx.sort((a,b)=>poses[b].sn - poses[a].sn);
+      else if (I.order === 'back first') idx.sort((a,b)=>poses[a].sn - poses[b].sn);
+      flightRank = { n:N, mode:I.order, rank: idx.reduce((m,j,r)=>(m[poses[j].ci]=r, m), {}) };
+    }
+
+    // stacking rank by depth; a card whose rank rises has just passed in front of a neighbour
+    if (L.stacking === 'depth (pops)' && introDone){
+      const ranked = poses.slice().sort((x,y)=> (x.sn - y.sn) || (x.ci - y.ci));
+      const box = o => { const c = cards[o.ci]; const k = o.sn>=0 ? lerp(Z.sides, Z.front, o.sn) : lerp(Z.sides, Z.back, -o.sn);
+        return { x:o.sx, y:o.sy, hw:c.w*k/2, hh:c.h*k/2 }; };
+      const overlaps = (A,B) => Math.abs(A.x-B.x) < A.hw+B.hw && Math.abs(A.y-B.y) < A.hh+B.hh;
+      ranked.forEach((o,r) => {
+        const c = cards[o.ci];
+        if (c.rank !== undefined && r > c.rank){
+          // only ease the swap if it is visible — i.e. the card it just passed actually overlaps it on screen
+          const A = box(o);
+          for (let j = c.rank; j < r; j++){ const other = ranked[j]; if (other && other.ci !== o.ci && overlaps(A, box(other))){ c.swapT0 = now; break; } }
+        }
+        c.rank = r;
+      });
+    }
+
+    const ar = ASPECT[V.Cards.aspect] || 9/16;
+
+    poses.forEach(o => {
+      const c = cards[o.ci], el = c.el, sn = o.sn, t = (sn+1)/2;
+
+      // orbit pose
+      let os = sn>=0 ? lerp(Z.sides, Z.front, sn) : lerp(Z.sides, Z.back, -sn);
+      if (Z.perspectiveSize) os *= o.ps;
+      const f = Math.pow(1-t, D.falloff);
+      let sx = o.sx, sy = o.sy, sc = os * rk;
+      let op = lerp(1, D.backOpacity, f), bl = D.backBlur*bK*f*f, gr = f*D.backGreyscale;
+
+      // intro: fly in from the camera — strong ease-out, big → settled, blur clears, fade in early
+      const e = clamp((it - tReveal - flightRank.rank[o.ci]*stag) / flight);
+      if (e < 1){
+        if (reduce){ op *= e; }
+        else {
+          // depth z eases from near the camera to the ring; scale = 1/z, and position scales with it
+          // around the vanishing point (the logo), so size and travel always agree — no sliding
+          const ez = easeOutQuint(e);
+          const z0 = 1/I.fromScale, zz = lerp(z0, 1, ez), d = 1/zz;
+          sx = o.sx * d; sy = o.sy * d; sc = os * d;
+          const near = clamp((d - 1) / (I.fromScale - 1 || 1));        // 1 at the camera → 0 on the ring
+          bl += I.fromBlur*bK * near * near;                                // depth of field: blur only while close
+          op *= easeOutQuad(clamp(e / 0.35));
+        }
+      }
+
+      // stacking: sorting by depth swaps two overlapping cards the instant they pass each other at the front
+      // (the "pop"). Deck order never swaps neighbours: each card slides over the one ahead of it, like a fanned
+      // deck. The only reorder is at the very back, where the card fades out and back in so the swap is hidden.
+      let zr;
+      if (L.stacking === 'depth (pops)'){
+        zr = t*100;
+        // eased swap: the card that just moved above a neighbour dissolves in (opacity + a 1.5px blur, strong
+        // ease-out, 240ms) instead of snapping, so the overlap reads as one card passing in front of another
+        const sw = c.swapT0 ? clamp((now - c.swapT0) / 240) : 1;
+        if (sw < 1 && g < 0.5 && exId === -1){ const m = easeOutQuint(sw); op *= lerp(0.45, 1, m); bl += (1-m)*1.5; }
+      }
+      else {
+        zr = 50 + (dir * o.a / Math.PI) * 49;
+        const wrap = clamp((Math.PI - Math.abs(o.a)) / (step*0.5 || 1));
+        op *= lerp(easeInOutCubic(wrap), 1, g);
+      }
+      let z = Math.round(lerp(zr, 60, g));
+
+      // exit: the intro in reverse — each card flies out past the camera (front first), blurring and fading;
+      // the work section only starts rising once the orbit has gone
+      if (mph > 0 && reduce){ op *= 1 - mph; }
+      else if (mph > 0){
+        const fs = C.flyStagger, ef = clamp(mph*(1+fs) - fs*(flightRank.rank[o.ci]/Math.max(1, N-1)));
+        const eo = easeInOutCubic(ef);
+        const d = 1 / lerp(1, 1/C.flyScale, eo);                 // depth → scale, around the vanishing point
+        sx *= d; sy *= d; sc *= d;
+        bl += C.blur*bK * eo * eo;
+        op *= 1 - easeInOutCubic(clamp((ef - 0.35) / 0.65));
+      }
+
+      // keep the text readable: a card covering it fades (and softens) away, smoothed so it never flickers
+      if (RS.clearText && txtClear){
+        const hw = c.w*sc/2, hh = c.h*sc/2; let cov = 0;
+        for (const T of txtClear.list){
+          const ix = Math.min(sx + hw, T.r) - Math.max(sx - hw, T.l), iy = Math.min(sy + hh, T.b) - Math.max(sy - hh, T.t);
+          if (ix > 0 && iy > 0) cov = Math.max(cov, (ix*iy) / Math.min(4*hw*hh, T.a) * T.wt);
+        }
+        const fz = clamp((cov - RS.tolerance) / RS.fadeRange), tgt = fz*fz*(3 - 2*fz);   // smoothstep: decisive, no half-ghosts
+        c.clr = (c.clr || 0) + (tgt - (c.clr || 0)) * (1 - Math.exp(-dt / 0.18));
+        if (c.clr > 0.002){ op *= 1 - easeInOutCubic(c.clr); bl += c.clr * 3 * bK; }
+      } else c.clr = 0;
+
+      // case view: this card expands from wherever it is; everything else steps back fast (≈200ms of the 500)
+      if (exId !== -1){
+        if (o.ci === exId){
+          const ew = Math.min(innerWidth*V.Expand.width, (innerHeight*0.72)/ar);
+          sx = lerp(sx, 0, exP); sy = lerp(sy, -24 + scrollY, exP); sc = lerp(sc, ew/c.w, exP);
+          op = lerp(op, 1, exP); bl = lerp(bl, 0, exP); gr = lerp(gr, 0, exP); z = 400;
+          caseInfo.style.top = (innerHeight/2 - 24 + (ew*ar)/2 + 20) + 'px';
+        } else op *= 1 - clamp(exP*2.5);
+      }
+
+      el.style.transform = `translate3d(${sx.toFixed(1)}px,${sy.toFixed(1)}px,0) scale(${sc.toFixed(4)})`;
+      put(el, 'opacity', q(op, 0.005).toFixed(3));
+      // filter stays on (or off) for the whole scroll; toggling it per card re-rasterised the card and made it jump
+      const filterOn = D.backBlur > 0 || D.backGreyscale > 0 || e < 1;
+      put(el, 'filter', filterOn ? `grayscale(${gr.toFixed(3)}) blur(${Math.max(0, bl).toFixed(2)}px)` : 'none');
+      put(el, 'zIndex', String(z));
+      put(el, '--s', F.keepCrisp ? q(Math.max(0.05, sc), 1/64).toFixed(4) : '1');
+      put(el, '--sh', q(V.Cards.shadow*t*(1-g), 0.01).toFixed(2));
+      // frames: the front card is "selected" — switches instantly (it changes too often to fade)
+      const mode = F.show;
+      let fo = mode==='always' ? 1 : mode==='never' ? 0 : mode==='hover' ? (el._hover?1:0) : 0;
+      if (o.ci === frontCi) frontPose = { sx, sy, w: c.w*sc, h: c.h*sc, z, lbl: c.lbl.textContent, e };
+      if (mode !== 'never') fo = Math.max(fo, g >= 0.98 ? 1 : 0, o.ci===exId && exP>0.98 ? 1 : 0);
+      if (e < 1) fo = 0;
+      put(el, '--fo', (fo * (1 - clamp(mph*3))).toFixed(2));
+    });
+
+    // selection overlay (front-only mode): sized in real pixels, not scaled → crisp lines, no shimmer
+    const showSel = F.show === 'front only' && frontPose && frontPose.e >= 1 && heroAway < 0.4 && exId === -1 && !(cards[frontCi] && cards[frontCi].clr > 0.3);
+    put(sel, 'opacity', showSel ? '1' : '0');
+    if (frontPose){
+      const W = Math.round(frontPose.w), H = Math.round(frontPose.h);
+      put(sel, 'width', W + 'px'); put(sel, 'height', H + 'px');
+      sel.style.transform = `translate3d(${(frontPose.sx - W/2).toFixed(1)}px,${(frontPose.sy - H/2).toFixed(1)}px,0)`;
+      put(sel, 'zIndex', '140');   // selection outline draws above every card, like Figma's, so the front piece reads even when the next card overlaps it
+      if (selLbl.textContent !== frontPose.lbl) selLbl.textContent = frontPose.lbl;
+    }
+
+    if (frontCi !== front && frontCi >= 0){
+      front = frontCi;
+      const c = cards[front];
+      clearTimeout(caption._t);
+      caption.classList.remove('pre'); caption.classList.add('out');
+      caption._t = setTimeout(()=>{
+        nameEl.textContent = c.title; figEl.textContent = 'Fig. ' + c.fig;
+        caption.classList.replace('out','pre');
+        caption.offsetWidth;
+        caption.classList.remove('pre');
+      }, 120);
+    }
+
+    // ---- text + chrome
+    if (it >= tText && !centre.classList.contains('in')){ centre.classList.add('in'); stage.classList.add('in'); }
+    const away = clamp(g*2.5) , exAway = clamp(exP*2.5);
+    if (isList(V)){
+      put(centre, 'opacity', '1'); put(centre, 'filter', 'none'); put(centre, 'pointerEvents', '');
+      put(centre, 'transform', 'translateX(-50%)');
+    } else {
+      put(centre, 'opacity', q((1-heroAway)*(1-exAway), 0.005).toFixed(3));
+      put(heroCue, '--co', q(1-clamp(heroAway*1.6), 0.005).toFixed(3));
+      put(centre, 'filter', (heroAway > 0.01 && !reduce) ? `blur(${(easeInOutCubic(heroAway)*C.blur*bK).toFixed(2)}px)` : 'none');
+      put(centre, 'pointerEvents', heroAway > 0.5 || exAway > 0.5 ? 'none' : '');
+      put(centre, 'transform', `translate(-50%, calc(-50% - ${(easeOutQuad(heroAway)*16).toFixed(1)}px))`);
+    }
+    put(stage, 'overflow', exId !== -1 ? 'visible' : '');
+    chromeEls.forEach(el => put(el, 'visibility', (heroAway > 0.3 || exAway > 0.5) ? 'hidden' : ''));
+
+    // ---- case chrome
+    put(caseBg, 'opacity', q(exP*0.96, 0.005).toFixed(3));
+    const ip = clamp((exP-0.6)/0.4);
+    put(caseInfo, 'opacity', ip.toFixed(3)); put(caseClose, 'opacity', ip.toFixed(3));
+
+    // ---- logo: outline traces (ring, then swirl), fill settles, then it lifts into the name block's mark
+    if (!markRect) measureMark();
+    // logo appears: fade in, settle from 96% and come into focus — one quiet ease-out
+    const appear = clamp(it / LD);
+    const settle = lerp(0.96, 1, easeOutExpo(appear));
+    const glideDur = Math.max(0.5, tText - tReveal - 0.15);
+    const glide = ease(clamp((it - tReveal - 0.1) / glideDur));         // lands just before the text rises
+    const tx = lerp(0, markRect.cx, glide), ty = lerp(0, markRect.cy, glide);
+    const msc = lerp(I.logoScale*settle, (markRect.w/97.55) || 1, glide);
+    let mOp = I.logoStays ? 1 : 1 - ease(clamp((it - tReveal) / 0.4));
+    if (glide >= 1 || reduce) mOp = 0;
+    introMark.style.transform = `translate(calc(-50% + ${tx.toFixed(1)}px), calc(-50% + ${ty.toFixed(1)}px)) scale(${msc.toFixed(3)})`;
+    put(introMark, 'opacity', (mOp * easeOutQuad(appear)).toFixed(3));
+    put(introMark, 'filter', (appear < 1 && !reduce) ? `blur(${((1 - easeOutExpo(appear)) * 6).toFixed(2)}px)` : 'none');
+    put(centreMark, 'opacity', (glide >= 1 || reduce) ? '1' : '0');
+
+    bar.style.transform = `scaleX(${p.toFixed(4)})`;
+
+    // ---- statement: words read in with scroll (opacity only); the opening sentence starts already read
+    const y = getScrollY(), vh = innerHeight;
+    // letters wave in: unread grey → your gradient (orange → red → pink → purple → blue) → ink, one after another
+    if (statementWords.length){
+      const W = V.Wave, n = statementWords.length, tNow = now/1000;
+      waveHead += (readP*n - waveHead) * (W.scrub > 0 ? 1 - Math.exp(-dt / W.scrub) : 1);
+      const dark = isDark(V), ink = hex(dark ? V.Theme.darkInk : V.Text.ink), bg = hex(dark ? V.Theme.darkBackground : V.Text.background);
+      const start = mixRGB(bg, ink, W.startOpacity), dur = Math.max(0.05, W.duration), pk = W.peak;
+      const active = Math.round(waveHead);
+      for (let i = 0; i < n; i++){
+        const c = statementWords[i], on = i < active;
+        if (on !== c._on){ c._on = on; c._t0 = tNow; }
+        let col;
+        if (reduce) col = on ? ink : start;
+        else if (on){
+          const e = (tNow - c._t0) / dur;
+          if (e >= 1) col = ink;
+          else if (e < pk) col = mixRGB(start, WAVE[0], easeOutQuad(e/pk));
+          else { const k = Math.pow((e - pk)/(1 - pk), 2) * WAVE.length;      // ease-in through the stops, then into ink
+                 const j = Math.floor(k), f = k - j; col = mixRGB(WAVE[j], j+1 < WAVE.length ? WAVE[j+1] : ink, f); }
+        } else {
+          const e = clamp((tNow - c._t0) / (dur*0.5));
+          col = mixRGB(ink, start, e);
+        }
+        put(c, '-webkit-text-fill-color', `rgb(${col[0]|0},${col[1]|0},${col[2]|0})`);
+      }
+    }
+    // statement: blurs in, then blurs out as the orbit leaves
+    const stOut = clamp(mph*3);
+    put(statementEl, 'opacity', q(stIn * (1 - stOut), 0.005).toFixed(3));
+    const stBlur = (1 - easeOutQuint(stIn)) * C.blur*bK + easeInOutCubic(stOut) * C.blur*bK;
+    put(statementEl, 'filter', (stBlur > 0.05 && !reduce) ? `blur(${stBlur.toFixed(2)}px)` : 'none');
+    statementEl.style.transform = `translate(-50%, calc(-50% + ${((1-easeOutQuint(stIn))*12 - easeInOutCubic(stOut)*16).toFixed(1)}px)) scale(${(1 + easeInOutCubic(stOut)*0.04).toFixed(4)})`;
+    // work cells: each one rises in from below, coming out of a blur as it enters the screen
+    for (const cell of workCells){
+      const top = cell._docTop - wy;
+      const k = easeOutQuint(clamp((cvh - top) / (cvh * 0.45)));       // 0 at the bottom edge → 1 a little way up
+      put(cell, 'opacity', q(k, 0.01).toFixed(2));
+      put(cell, 'transform', (k >= 1 || reduce) ? 'none' : `translateY(${((1-k)*48).toFixed(1)}px)`);
+      put(cell, 'filter', (k >= 0.99 || reduce) ? 'none' : `blur(${((1-k)*C.blur*bK).toFixed(2)}px)`);
+    }
+    // ---- dock + edge blur appear once the work is on screen
+    const showDock = y + vh*0.6 > secs.wkTop;
+    if (dock._on !== showDock){ dock._on = showDock; dock.classList.toggle('show', showDock); document.documentElement.classList.toggle('bar-on', showDock); edgeBlur.classList.toggle('show', showDock); if (exId === -1) dock.inert = !showDock; }
+    if (F.gradient && F.gradientSpin){ gAngle = ((gAngle ?? F.gradientAngle) + F.gradientSpin*dt) % 360; paintFrame(gAngle); } else gAngle = null;
+  }
+
+  kit.subscribe(applyStatic);
+  let introSkipped = false;
+  const skipIntro = () => { if (V && !introDone && introStart > 0 && introStart < Infinity){ introSkipped = true; introStart = performance.now() - 60000; } };
+  ['keydown','wheel','touchstart','pointerdown'].forEach(t => addEventListener(t, skipIntro, { passive:true }));
+  // the logo starts drawing in the centre straight away; the works only fly in once their images are decoded.
+  // If they're not ready when the logo finishes, the logo simply holds in the centre until they are.
+  let imagesReady = false;
+  function begin(){
+    let seen = false; try{ seen = sessionStorage.getItem('orbitIntroSeen') === '1'; }catch(e){}
+    introStart = (seen && V && V.Intro.oncePerSession) ? -1e9 : performance.now();
+    window.__is = introStart;
+    const decodes = cards.filter(c=>c.img).map(c => c.img.decode().catch(()=>{}));
+    Promise.race([Promise.all(decodes), new Promise(r => setTimeout(r, 4000))]).then(() => { imagesReady = true; });
+  }
+  if (document.readyState === 'loading') addEventListener('DOMContentLoaded', begin); else begin();
+  readScroll();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
