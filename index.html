@@ -649,6 +649,63 @@
   const easeDraw = penBezier(0.45, 0, 0.22, 1), easeCurl = penBezier(0.3, 0.42, 0.24, 1);
   const T_FORK = (() => { let lo = 0, hi = 1; for (let i = 0; i < 30; i++){ const m = (lo+hi)/2; (easeDraw(m) < 0.787) ? lo = m : hi = m; } return 0.14 + 0.9*lo; })();
   const penTop = document.getElementById('penTop'), penBot = document.getElementById('penBot'), penWave = document.getElementById('penWave'), penCurl = document.getElementById('penCurl');
+
+  // ---- favicon: the tab icon writes itself with the same Tide pens — on load, and again whenever you come back to the tab.
+  // Drawn to a 64px canvas at ~30fps for ~1.4s, then handed back to the crisp static SVG. Browsers that don't take
+  // live favicons (Safari) keep the static one; reduced motion and Pause skip it.
+  (() => {
+    const link = document.querySelector('link[rel="icon"]');
+    const cv = document.createElement('canvas'), layer = document.createElement('canvas');
+    if (!link || !cv.getContext || !window.Path2D) return;
+    const S = 64, k = S / 110;               // the static favicon's viewBox: -6 -30 110 110
+    cv.width = cv.height = layer.width = layer.height = S;
+    const ctx = cv.getContext('2d'), lx = layer.getContext('2d');
+    const shape = id => new Path2D(document.querySelector('#introMark .' + id).getAttribute('d'));
+    const ringFill = shape('m-ring'), swirlFill = shape('m-swirl');
+    const pen = (el, w, t0, dur, ez) => ({ p: new Path2D(el.getAttribute('d')), len: el.getTotalLength(), w, t0, dur, ez });
+    const groups = [
+      { fill: ringFill, rule: 'evenodd', pens: [pen(penTop, 7, 0.05, 1.0, easeDraw), pen(penBot, 7, 0.05, 1.0, easeDraw)] },
+      { fill: swirlFill, rule: 'nonzero', pens: [pen(penWave, 5, 0.14, 0.9, easeDraw), pen(penCurl, 5, T_FORK, 0.64, easeCurl)] },
+    ];
+    const END = Math.max(...groups.flatMap(g => g.pens.map(q => q.t0 + q.dur)));
+    const TK = 1.2;                           // seconds per unit of pen time (the hero intro's pacing, a touch quicker)
+    const dark = matchMedia('(prefers-color-scheme: dark)');   // the tab strip follows the OS, not the site's toggle
+    const STATIC = link.getAttribute('href');
+    let raf = 0, t0 = 0, last = 0;
+    function frame(t){                        // t: seconds since start
+      ctx.clearRect(0, 0, S, S);
+      const ink = dark.matches ? '#f0eee9' : '#141414';
+      for (const g of groups){
+        lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalCompositeOperation = 'source-over'; lx.clearRect(0, 0, S, S);
+        lx.setTransform(k, 0, 0, k, 6*k, 30*k);
+        lx.lineCap = 'round'; lx.lineJoin = 'round'; lx.strokeStyle = '#000';
+        for (const q of g.pens){
+          const d = q.ez(Math.min(1, Math.max(0, (t/TK - q.t0) / q.dur)));
+          if (d <= 0) continue;
+          lx.lineWidth = q.w; lx.setLineDash([q.len*d, q.len]); lx.stroke(q.p);
+        }
+        lx.globalCompositeOperation = 'source-in'; lx.fillStyle = ink; lx.fill(g.fill, g.rule);
+        ctx.drawImage(layer, 0, 0);
+      }
+      link.href = cv.toDataURL('image/png');
+    }
+    function tick(now){
+      const t = (now - t0) / 1000;
+      if (t >= END*TK){ raf = 0; link.href = STATIC; return; }
+      if (now - last >= 33){ last = now; frame(t); }      // ~30fps is plenty for a 16px icon
+      raf = requestAnimationFrame(tick);
+    }
+    function play(){
+      if (reduce || document.documentElement.classList.contains('paused') || document.hidden) return;
+      cancelAnimationFrame(raf); t0 = performance.now(); last = 0; raf = requestAnimationFrame(tick);
+    }
+    let hiddenAt = 0;
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden){ hiddenAt = performance.now(); if (raf){ cancelAnimationFrame(raf); raf = 0; link.href = STATIC; } }
+      else if (performance.now() - hiddenAt > 1500) play();   // a quick flick between tabs doesn't replay it
+    });
+    play();
+  })();
   // cache the name-block mark position (reading layout every frame forces a reflow)
   let markRect = null;
   let gridIO = null;
