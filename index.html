@@ -121,6 +121,7 @@
   /* a soft pool of page colour under the text, so contrast never depends on which picture passes behind */
   .centre::before,.statement-text::before{content:"";position:absolute;inset:-56px -88px;z-index:-1;pointer-events:none;
     background:radial-gradient(closest-side,var(--bg) 72%,color-mix(in srgb,var(--bg) 0%,transparent))}
+  .centre::before{inset:-16px -88px -56px}   /* less glow above the logo, so back cards there aren't washed into ghosts */
   /* the hero's colour pool only appears with the text, so it never hides the intro logo */
   .centre::before{opacity:0;transition:opacity .6s ease} .centre.in::before{opacity:1}
   .mark{width:97.55px;height:auto;display:block}
@@ -471,11 +472,14 @@
       logoHold:[0.25,0,3,0.05],
       logoScale:[1.6,0.5,6,0.05],
       logoStays:true,
-      flight:[1.6,0.3,2.5,0.05],
-      stagger:[90,0,200,1],             // average ms between cards; front cards get the widest gaps
+      flight:[1.3,0.3,2.5,0.05],
+      stagger:[75,0,200,1],             // average ms between cards; front cards get the widest gaps
       order:{ type:"select", options:["front first","back first","around"], default:"front first" },
       fromScale:[2.4,1.2,5,0.05],
-      fromBlur:[5,0,12,0.5],
+      fromBlur:[2,0,12,0.5],              // depth of field while near the camera (kept light: heavy blur read as a broken card)
+      settleScale:[1.3,1,2,0.01],        // cards land this much bigger, then ripple down to size
+      rippleSpread:[0.6,0,1.5,0.05],     // s for the scale-down wave to travel from the front of the ring to the back
+      rippleDur:[0.95,0.3,2,0.05],       // s each card takes to spring down (with a little overshoot)
       textIn:[0.7,0.1,3,0.05],
       lockScroll:true,
       oncePerSession:false,
@@ -1263,8 +1267,10 @@
     const stagSpan = Math.max(0,N-1)*stag;
     const flyDelay = r => N > 1 ? stagSpan * easeOutQuad(r/(N-1)) : 0;   // shrinking gaps: first cards clearly one by one
     if (!imagesReady && !introSkipped && I.play && it > tReveal && introStart > 0){ introStart += (it - tReveal) * 1000; }   // hold on the logo
-    const tSettled = tReveal + stagSpan + flight;
-    const tText = tReveal + stagSpan + flight*0.55;      // text starts as the last cards settle
+    const doRipple = !reduce && !listMode && I.settleScale > 1.001;
+    const tR0 = tReveal + stagSpan + flight*0.8;                 // ripple starts as the last cards land
+    const tSettled = doRipple ? tR0 + I.rippleSpread + I.rippleDur : tReveal + stagSpan + flight;
+    const tText = doRipple ? tR0 + 0.1 : tReveal + stagSpan + flight*0.55;      // text rises as the cards ripple down
     const tEnd = Math.max(tSettled, tText + I.textIn);
     if (introSkipped && !introDone){                     // skipped: play the rest faster (ramping 1× → 3×) instead of cutting to the end
       skipIt += dt * lerp(1, 3, easeInOutCubic(clamp((now - skipAt) / 350)));
@@ -1402,8 +1408,16 @@
           sx = o.sx * d; sy = o.sy * d; sc = os * rk * d;              // rk: same screen-size scale the card settles at (no snap on landing)
           // no live CSS blur here (it re-rasterised 2.4×-scaled cards); the WebGL path draws the depth of field instead
           const near = clamp((d - 1) / (I.fromScale - 1 || 1)); gb += I.fromBlur*bK * near * near;
-          op *= easeOutQuad(clamp(e / 0.3));
+          op *= easeOutQuad(clamp(e / 0.18));
         }
+      }
+
+      // settle → ripple: every card lands settleScale× bigger; then a wave starting at the front of the ring and
+      // running round both sides to the back springs each one down to size (one overshoot, then it settles)
+      if (doRipple){
+        const rt = (it - tR0 - I.rippleSpread * Math.abs(o.a) / Math.PI) / I.rippleDur;
+        const sp = rt <= 0 ? 0 : rt >= 1 ? 1 : 1 - Math.exp(-5.5*rt) * Math.cos(3*Math.PI*rt);
+        sc *= lerp(I.settleScale, 1, sp);
       }
 
       // stacking: sorting by depth swaps two overlapping cards the instant they pass each other at the front
