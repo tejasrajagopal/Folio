@@ -5,11 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tejas Rajagopal — Brand designer for fintech, AI and crypto</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" href="fonts/JejuMyeongjo.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/GeistMono-Light.woff2" as="font" type="font/woff2" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="vendor/styles.css">
 <link rel="stylesheet" href="vendor/lenis.css">
 <style>
-  @font-face{font-family:"JejuMyeongjo";src:url(fonts/JejuMyeongjo.woff) format("woff");font-weight:400;font-display:swap}
+  /* fonts are subset to Latin (basic + Latin-1 + punctuation + arrows) */
+  @font-face{font-family:"JejuMyeongjo";src:url(fonts/JejuMyeongjo.woff2) format("woff2");font-weight:400;font-display:swap}
   @font-face{font-family:"Geist Mono";src:url(fonts/GeistMono-Light.woff2) format("woff2");font-weight:300;font-display:swap}
   @font-face{font-family:"Geist Mono";src:url(fonts/GeistMono-Regular.woff2) format("woff2");font-weight:400;font-display:swap}
   @font-face{font-family:"Geist Mono";src:url(fonts/GeistMono-Medium.woff2) format("woff2");font-weight:500;font-display:swap}
@@ -344,7 +347,10 @@
 <button class="case-close" id="caseClose" type="button">Close</button>
 
 <script src="vendor/lenis.min.js"></script>
-<script src="vendor/browser.global.js"></script>
+<script>
+  // DialKit (~420 KB of JS + CSS) only loads with #tune; visitors get the defaults from cfg.
+  if (location.hash === "#tune") document.write('<link rel="stylesheet" href="vendor/styles.css"><script src="vendor/browser.global.js"><\/script>');
+</script>
 <script>
 (() => {
   const WORKS = [
@@ -537,9 +543,22 @@
   const ASPECT={ "16:9":9/16, "3:2":2/3, "4:3":3/4, "1:1":1, "4:5":5/4 };
 
   const tuneOn = location.hash === "#tune";          // the tuning panel never ships to visitors
+  // the config's default values, resolved the way DialKit does (slider → first number, select → default)
+  const cfgDefaults = c => {
+    const o = {};
+    for (const [k, v] of Object.entries(c)) {
+      if (k === "_collapsed") continue;
+      o[k] = Array.isArray(v) ? v[0]
+        : (v && typeof v === "object") ? (v.type === "select" ? (v.default ?? (v.options[0]?.value ?? v.options[0])) : v.type ? v : cfgDefaults(v))
+        : v;
+    }
+    return o;
+  };
   if (tuneOn) DialKit.createDialRoot({ position:"top-right", theme:"light", defaultOpen: innerWidth > 800 });
-  const kit = DialKit.createDialKit("Orbit", cfg, { id:"orbit-hero-v34", persist:true,
-    onAction: path => { if (String(path).includes("replay")) startIntro(); } });
+  const kit = tuneOn
+    ? DialKit.createDialKit("Orbit", cfg, { id:"orbit-hero-v34", persist:true,
+        onAction: path => { if (String(path).includes("replay")) startIntro(); } })
+    : { subscribe: fn => { fn(cfgDefaults(cfg)); return () => {}; } };
 
   // ---------- DOM ----------
   const $ = id => document.getElementById(id);

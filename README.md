@@ -23,13 +23,13 @@ Opening `index.html` directly from disk also mostly works, but a server is recom
 
 ## Tuning
 
-Open the page with `#tune` at the end of the URL, for example `http://localhost:8000/#tune`, to show the tuning panel. It controls the layout, cards, motion, intro, theme, responsive behaviour and more. Changes are saved in the browser.
+Open the page with `#tune` at the end of the URL, for example `http://localhost:8000/#tune`, to show the tuning panel. It controls the layout, cards, motion, intro, theme, responsive behaviour and more. Changes are saved in the browser and only apply while `#tune` is on; to ship a value, change its default in the `cfg` block of `index.html`. DialKit itself only loads with `#tune`, so visitors never download it.
 
 ## Structure
 
 ```
 index.html   the whole page: markup, styles and script
-fonts/       Jeju Myeongjo, Geist Mono and Geist Pixel
+fonts/       Jeju Myeongjo, Geist Mono and Geist Pixel (WOFF2, subset to Latin)
 works/       work images (WebP, 1280px)
 vendor/      DialKit (tuning panel) and Lenis (smooth scroll)
 ```
