@@ -251,7 +251,9 @@
   }
   /* hero: a line under the text with a colour run travelling down it, three times */
   /* sits under the orbit, so cards pass over it rather than being cut by it */
-  .hero-cue{position:absolute;left:50%;top:calc(50% + 252px);z-index:1;width:1px;height:128px;margin-left:-.5px;background:var(--wframe);overflow:hidden;
+  /* starts just under "Get in touch" (top set in JS from the link's position) and fades in from nothing at its top */
+  .hero-cue{position:absolute;left:50%;top:calc(50% + 252px);z-index:1;width:1px;height:150px;margin-left:-.5px;background:var(--wframe);overflow:hidden;
+    -webkit-mask-image:linear-gradient(to bottom,transparent,#000 45%);mask-image:linear-gradient(to bottom,transparent,#000 45%);
     opacity:0;transition:opacity .8s ease .4s}
   .stage.in .hero-cue{opacity:var(--co,1)}
   /* a soft-ended gradient run that keeps travelling down the line (Pause stops it) */
@@ -648,6 +650,10 @@
     // relative to the stage's centre, not the window's: the window includes the scrollbar gutter, the stage doesn't
     const r = centreMark.getBoundingClientRect(), sr = stage.getBoundingClientRect();
     markRect = { cx: r.left + r.width/2 - (sr.left + sr.width/2), cy: r.top + r.height/2 - (sr.top + sr.height/2), w: r.width };
+    // the scroll line hangs from "Get in touch" (its resting position: the rise-in offset is taken out)
+    const cta = document.getElementById('cta'), cue = document.getElementById('heroCue');
+    if (cta && cue && cta.offsetParent){ const cr = cta.getBoundingClientRect(), m = new DOMMatrix(getComputedStyle(cta).transform);
+      cue.style.top = Math.round(cr.bottom - m.m42 - sr.top + 10) + 'px'; }
   }
   addEventListener('resize', () => requestAnimationFrame(measureMark));
   document.fonts && document.fonts.ready.then(() => requestAnimationFrame(measureMark));
