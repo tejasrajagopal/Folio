@@ -425,7 +425,7 @@
       centreX:[0,-500,500,1],          // nudge from the auto-centred ring, px
       centreY:[0,-400,400,1],          // nudge from the auto-centred ring, px
       startAngle:[-27,-180,180,1],
-      stacking:{ type:"select", options:[{value:"depth (pops)",label:"Depth (eased swap)"},{value:"deck (smooth)",label:"Deck (no swap)"}], default:"deck (smooth)" },
+      stacking:{ type:"select", options:[{value:"depth (pops)",label:"Depth (eased swap)"},{value:"deck (smooth)",label:"Deck (no swap)"}], default:"depth (pops)" },
     },
     Cards: {
       width:[481,80,720,1],
@@ -1550,7 +1550,9 @@
       // deck. The only reorder is at the very back, where the card fades out and back in so the swap is hidden.
       let zr;
       if (L.stacking === 'depth (pops)'){
-        zr = t*100;
+        // nearer is always on top. After the intro the order is the exact depth rank (t*100 rounded to whole
+        // z-indexes tied for the cards near the front, and ties fell back to card order, i.e. the wrong one could win)
+        zr = (introDone && c.rank !== undefined) ? 10 + c.rank * 80 / Math.max(1, poses.length - 1) : t*100;
         // eased swap: the card that just moved above a neighbour dissolves in (opacity + a 1.5px blur, strong
         // ease-out, 240ms) instead of snapping, so the overlap reads as one card passing in front of another
         const sw = c.swapT0 ? clamp((now - c.swapT0) / 240) : 1;
