@@ -48,7 +48,10 @@
   .media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;
     user-select:none;-webkit-user-drag:none;transition:transform .2s ease}
   :root{--ease-out-expo:cubic-bezier(.19,1,.22,1);--ease-out-quad:cubic-bezier(.25,.46,.45,.94);--ease-in-out-cubic:cubic-bezier(.645,.045,.355,1)}
-  @media (hover:hover) and (pointer:fine){ .card:hover .media img{transform:scale(var(--hover))} }
+  /* the far-away look (soft + grey) is drawn once per card and crossfaded in by depth — opacity is cheap to animate,
+     a live blur on 17 moving images is not */
+  .media .far{position:absolute;inset:0;width:100%;height:100%;opacity:0;pointer-events:none;transition:transform .2s ease}
+  @media (hover:hover) and (pointer:fine){ .card:hover .media img,.card:hover .media .far{transform:scale(var(--hover))} }
   /* press feedback: felt, not seen. Applied to children because the card's own transform is driven per frame */
   .card .media,.card .frame{transition:transform .15s var(--ease-out-quad)}
   .card:active .media,.card:active .frame{transform:scale(.98)}
@@ -556,6 +559,11 @@
   const q = (v, step) => Math.round(v/step)*step;
   const hex = h => { h = h.replace('#',''); if (h.length === 3) h = [...h].map(x => x+x).join(''); return [0,2,4].map(i => parseInt(h.substr(i,2),16)); };
   const mixRGB = (a, b, t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t];
+  const mixInto = (o, a, b, t) => { o[0] = a[0]+(b[0]-a[0])*t; o[1] = a[1]+(b[1]-a[1])*t; o[2] = a[2]+(b[2]-a[2])*t; return o; };
+  const waveStart = [0,0,0], waveCol = [0,0,0];
+  let waveTheme = '', waveInk = null, waveBg = null;
+  const poseBuf = [], rankBuf = [];
+  const byDepth = (x, y) => (x.sn - y.sn) || (x.ci - y.ci);
   const WAVE = ['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'].map(h => hex(h));
   const easeOutQuint = t => 1 - Math.pow(1-t, 5);
   const easeOutQuad = t => 1 - (1-t)*(1-t);
@@ -582,11 +590,42 @@
     ring.appendChild(el);
     return el;
   }
+  // render each card's far-away version: cover-cropped to the card shape, greyscaled and blurred, at a small size
+  const canFilter = (() => { try { const x = document.createElement('canvas').getContext('2d'); x.filter = 'blur(2px)'; return x.filter === 'blur(2px)'; } catch(e){ return false; } })();
+  function buildFar(c, blurPx, grey, ar){
+    const img = c.img, cv = c.far; if (!img || !cv || !img.naturalWidth) return false;
+    const W = 360, H = Math.max(1, Math.round(W * ar)), x = cv.getContext('2d');
+    cv.width = W; cv.height = H;
+    const iw = img.naturalWidth, ih = img.naturalHeight, sc = Math.max(W/iw, H/ih), sw = W/sc, sh = H/sc;
+    const b = blurPx * W / Math.max(1, c.w);                 // the card's blur, in this canvas's pixels
+    if (canFilter){
+      x.filter = `grayscale(${grey}) blur(${b.toFixed(2)}px)`;
+      x.drawImage(img, (iw-sw)/2 - sw*0.04, (ih-sh)/2 - sh*0.04, sw*1.08, sh*1.08, 0, 0, W, H);   // slight overscan so blurred edges stay filled
+    } else {
+      // Safari has no canvas filter: blur by scaling down and back up, then greyscale the pixels
+      const k = Math.max(1, b*1.6), t = document.createElement('canvas'); t.width = Math.max(1, Math.round(W/k)); t.height = Math.max(1, Math.round(H/k));
+      t.getContext('2d').drawImage(img, (iw-sw)/2, (ih-sh)/2, sw, sh, 0, 0, t.width, t.height);
+      x.imageSmoothingQuality = 'high'; x.drawImage(t, 0, 0, W, H);
+      if (grey > 0){ const d = x.getImageData(0, 0, W, H), p = d.data;
+        for (let i = 0; i < p.length; i += 4){ const l = 0.2126*p[i] + 0.7152*p[i+1] + 0.0722*p[i+2]; p[i] += (l-p[i])*grey; p[i+1] += (l-p[i+1])*grey; p[i+2] += (l-p[i+2])*grey; }
+        x.putImageData(d, 0, 0); }
+    }
+    return true;
+  }
+  let farKey = '';
+  function refreshFar(v, force){
+    const D = v.Depth, bK = isMobile(v) ? v.Mobile.blur : 1, ar = ASPECT[v.Cards.aspect] || 9/16;
+    const key = [D.backBlur*bK, D.backGreyscale, ar, v.Cards.width, isMobile(v)].join('|');
+    if (key === farKey && !force) return; farKey = key;
+    cards.forEach(c => { if (!c.far) return; c.farOk = false;
+      const go = () => { c.farOk = buildFar(c, D.backBlur*bK, D.backGreyscale, ar); };
+      if (c.img.complete && c.img.naturalWidth) go(); else c.img.addEventListener('load', go, { once:true }); });
+  }
   const cards = [];
   WORKS.forEach(([id]) => {
     const i = cards.length;
-    const el = makeCard(`<img src="works/${id}.webp" alt="" draggable="false">`, i);
-    const card = { el, img:el.querySelector('img'), lbl:el.querySelector('.frame span'), id, fig:id, dummy:false };
+    const el = makeCard(`<img src="works/${id}.webp" alt="" draggable="false"><canvas class="far"></canvas>`, i);
+    const card = { el, img:el.querySelector('img'), far:el.querySelector('canvas.far'), lbl:el.querySelector('.frame span'), id, fig:id, dummy:false };
     cards.push(card);
   });
   for (let d=0; d<MAX_DUMMIES; d++){
@@ -704,6 +743,7 @@
       
       c.lbl.textContent = F.labelText === 'title' ? c.title : `Frame 21472302${String(29+i).padStart(2,'0')}`;
     });
+    refreshFar(v);
 
     // the next section: a plain grid of the visible works
     const wg = document.getElementById('worksGrid');
@@ -988,15 +1028,19 @@
     }
 
     // ---- first pass: ring positions, front card, flight order
-    const poses = order.map((ci,k) => {
-      const th = Math.PI/2 + k*step - baseRot;
+    // (per-frame code allocates nothing: pose objects are reused and loops are plain for-loops)
+    const poses = poseBuf;
+    while (poses.length < order.length) poses.push({ ci:0, k:0, a:0, sn:0, sx:0, sy:0, ps:1 });
+    poses.length = order.length;
+    let frontCi = -1, best = -2, frontPose = null;
+    for (let k = 0; k < order.length; k++){
+      const o = poses[k], th = Math.PI/2 + k*step - baseRot;
       const x = R*Math.cos(th), z = R*Math.sin(th);
       const ps = persp/Math.max(120, persp - z*cT);
       let a = (th - Math.PI/2) % TAU; if (a > Math.PI) a -= TAU; if (a <= -Math.PI) a += TAU;   // angle from the front
-      return { ci, k, a, sn: Math.sin(th), sx: x*ps + L.centreX*rk, sy: z*sT*ps + L.centreY*rk, ps };
-    });
-    let frontCi = -1, best = -2, frontPose = null;
-    poses.forEach(o => { if (o.sn > best){ best = o.sn; frontCi = o.ci; } });
+      o.ci = order[k]; o.k = k; o.a = a; o.sn = Math.sin(th); o.sx = x*ps + L.centreX*rk; o.sy = z*sT*ps + L.centreY*rk; o.ps = ps;
+      if (o.sn > best){ best = o.sn; frontCi = o.ci; }
+    }
     // flight order is fixed at the intro's start so cards don't reshuffle mid-flight
     if (!flightRank || flightRank.n !== N || flightRank.mode !== I.order){
       const idx = poses.map((o,j)=>j);
@@ -1007,24 +1051,27 @@
 
     // stacking rank by depth; a card whose rank rises has just passed in front of a neighbour
     if (L.stacking === 'depth (pops)' && introDone){
-      const ranked = poses.slice().sort((x,y)=> (x.sn - y.sn) || (x.ci - y.ci));
-      const box = o => { const c = cards[o.ci]; const k = o.sn>=0 ? lerp(Z.sides, Z.front, o.sn) : lerp(Z.sides, Z.back, -o.sn);
-        return { x:o.sx, y:o.sy, hw:c.w*k/2, hh:c.h*k/2 }; };
-      const overlaps = (A,B) => Math.abs(A.x-B.x) < A.hw+B.hw && Math.abs(A.y-B.y) < A.hh+B.hh;
-      ranked.forEach((o,r) => {
-        const c = cards[o.ci];
+      const ranked = rankBuf; ranked.length = poses.length;
+      for (let j = 0; j < poses.length; j++) ranked[j] = poses[j];
+      ranked.sort(byDepth);
+      for (let r = 0; r < ranked.length; r++){
+        const o = ranked[r], c = cards[o.ci];
         if (c.rank !== undefined && r > c.rank){
           // only ease the swap if it is visible — i.e. the card it just passed actually overlaps it on screen
-          const A = box(o);
-          for (let j = c.rank; j < r; j++){ const other = ranked[j]; if (other && other.ci !== o.ci && overlaps(A, box(other))){ c.swapT0 = now; break; } }
+          const ka = o.sn>=0 ? lerp(Z.sides, Z.front, o.sn) : lerp(Z.sides, Z.back, -o.sn), ahw = c.w*ka/2, ahh = c.h*ka/2;
+          for (let j = c.rank; j < r; j++){
+            const other = ranked[j]; if (!other || other.ci === o.ci) continue;
+            const oc = cards[other.ci], kb = other.sn>=0 ? lerp(Z.sides, Z.front, other.sn) : lerp(Z.sides, Z.back, -other.sn);
+            if (Math.abs(o.sx - other.sx) < ahw + oc.w*kb/2 && Math.abs(o.sy - other.sy) < ahh + oc.h*kb/2){ c.swapT0 = now; break; }
+          }
         }
         c.rank = r;
-      });
+      }
     }
 
     const ar = ASPECT[V.Cards.aspect] || 9/16;
 
-    poses.forEach(o => {
+    for (let pi = 0; pi < poses.length; pi++){ const o = poses[pi];
       const c = cards[o.ci], el = c.el, sn = o.sn, t = (sn+1)/2;
 
       // orbit pose
@@ -1106,7 +1153,16 @@
       put(el, 'opacity', q(op, 0.005).toFixed(3));
       // filter stays on (or off) for the whole scroll; toggling it per card re-rasterised the card and made it jump
       const filterOn = D.backBlur > 0 || D.backGreyscale > 0 || e < 1;
-      put(el, 'filter', filterOn ? `grayscale(${gr.toFixed(3)}) blur(${Math.max(0, bl).toFixed(2)}px)` : 'none');
+      if (c.farOk){
+        // depth look comes from the pre-rendered far image fading in; only short-lived blur (intro flight, exit,
+        // eased swap) still uses a live filter, and it switches off entirely once those finish
+        const depthBl = D.backBlur*bK*f*f, extra = bl - depthBl;
+        const fo2 = q(lerp(Math.pow(f, 1.5), 0, g), 0.01);
+        put(c.far, 'opacity', fo2.toFixed(2)); put(c.far, 'visibility', fo2 < 0.01 ? 'hidden' : 'visible');   // invisible layers aren't drawn at all
+        put(el, 'filter', extra > 0.05 && !reduce ? `blur(${q(extra, 0.25).toFixed(2)}px)` : 'none');
+      } else {
+        put(el, 'filter', filterOn ? `grayscale(${q(gr, 0.1).toFixed(1)}) blur(${q(Math.max(0, bl), e < 1 ? 0.25 : 0.5).toFixed(2)}px)` : 'none');
+      }
       put(el, 'zIndex', String(z));
       put(el, '--s', F.keepCrisp ? q(Math.max(0.05, sc), 1/64).toFixed(4) : '1');
       put(el, '--sh', q(V.Cards.shadow*t*(1-g), 0.01).toFixed(2));
@@ -1117,7 +1173,7 @@
       if (mode !== 'never') fo = Math.max(fo, g >= 0.98 ? 1 : 0, o.ci===exId && exP>0.98 ? 1 : 0);
       if (e < 1) fo = 0;
       put(el, '--fo', (fo * (1 - clamp(mph*3))).toFixed(2));
-    });
+    }
 
     // selection overlay (front-only mode): sized in real pixels, not scaled → crisp lines, no shimmer
     const showSel = F.show === 'front only' && frontPose && frontPose.e >= 1 && heroAway < 0.4 && exId === -1 && !(cards[frontCi] && cards[frontCi].clr > 0.3);
@@ -1188,8 +1244,10 @@
     if (statementWords.length){
       const W = V.Wave, n = statementWords.length, tNow = now/1000;
       waveHead += (readP*n - waveHead) * (W.scrub > 0 ? 1 - Math.exp(-dt / W.scrub) : 1);
-      const dark = isDark(V), ink = hex(dark ? V.Theme.darkInk : V.Text.ink), bg = hex(dark ? V.Theme.darkBackground : V.Text.background);
-      const start = mixRGB(bg, ink, W.startOpacity), dur = Math.max(0.05, W.duration), pk = W.peak;
+      const dark = isDark(V), inkS = dark ? V.Theme.darkInk : V.Text.ink, bgS = dark ? V.Theme.darkBackground : V.Text.background;
+      if (waveTheme !== inkS + bgS){ waveTheme = inkS + bgS; waveInk = hex(inkS); waveBg = hex(bgS); }   // parsed once per theme, not per frame
+      const ink = waveInk, bg = waveBg;
+      const start = mixInto(waveStart, bg, ink, W.startOpacity), dur = Math.max(0.05, W.duration), pk = W.peak;
       const active = Math.round(waveHead);
       for (let i = 0; i < n; i++){
         const c = statementWords[i], on = i < active;
@@ -1199,14 +1257,16 @@
         else if (on){
           const e = (tNow - c._t0) / dur;
           if (e >= 1) col = ink;
-          else if (e < pk) col = mixRGB(start, WAVE[0], easeOutQuad(e/pk));
+          else if (e < pk) col = mixInto(waveCol, start, WAVE[0], easeOutQuad(e/pk));
           else { const k = Math.pow((e - pk)/(1 - pk), 2) * WAVE.length;      // ease-in through the stops, then into ink
-                 const j = Math.floor(k), f = k - j; col = mixRGB(WAVE[j], j+1 < WAVE.length ? WAVE[j+1] : ink, f); }
+                 const j = Math.floor(k), f = k - j; col = mixInto(waveCol, WAVE[j], j+1 < WAVE.length ? WAVE[j+1] : ink, f); }
         } else {
           const e = clamp((tNow - c._t0) / (dur*0.5));
-          col = mixRGB(ink, start, e);
+          col = mixInto(waveCol, ink, start, e);
         }
-        put(c, '-webkit-text-fill-color', `rgb(${col[0]|0},${col[1]|0},${col[2]|0})`);
+        // a letter that has settled (on and done, or off and faded) keeps its last colour: no string is built for it
+        const key = (col[0]|0)*65536 + (col[1]|0)*256 + (col[2]|0);
+        if (c._col !== key){ c._col = key; c.style.setProperty('-webkit-text-fill-color', `rgb(${col[0]|0},${col[1]|0},${col[2]|0})`); }
       }
     }
     // statement: blurs in, then blurs out as the orbit leaves
