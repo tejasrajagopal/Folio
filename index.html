@@ -661,6 +661,18 @@
     const cta = document.getElementById('cta'), cue = document.getElementById('heroCue');
     if (cta && cue && cta.offsetParent){ const cr = cta.getBoundingClientRect(), m = new DOMMatrix(getComputedStyle(cta).transform);
       cueTopPx = Math.round(cr.bottom - m.m42 - sr.top + 10); cue.style.top = cueTopPx + 'px'; cueDirty = true; }
+    // phones: the scroll line is pinned to the bottom, so on short screens it shortens to keep clear of "Get in touch"
+    const sc = document.querySelector('.scroll-cue'), pl = sc && sc.querySelector('i'), lb = sc && sc.querySelector('span');
+    if (cta && pl && document.documentElement.classList.contains('m-list')){
+      const cr = cta.getBoundingClientRect(), m = new DOMMatrix(getComputedStyle(cta).transform);
+      const room = Math.floor(lb.getBoundingClientRect().top - (cr.bottom - m.m42) - 32);   // label top → 32px under the link
+      const gap = Math.round(Math.min(66, Math.max(20, room * .3))), len = room - gap;
+      const fits = len >= 215;
+      sc.style.gap = fits ? '' : gap + 'px';
+      pl.style.height = fits ? '' : Math.max(0, len) + 'px';
+      pl.style.visibility = len < 40 ? 'hidden' : '';
+      sc.style.visibility = room < 0 ? 'hidden' : '';   // very short screens: the label would sit on the link
+    }
   }
   addEventListener('resize', () => requestAnimationFrame(measureMark));
   document.fonts && document.fonts.ready.then(() => requestAnimationFrame(measureMark));
