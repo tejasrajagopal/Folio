@@ -1809,7 +1809,10 @@
       float x = t*uFlRings - uFlPh; t = clamp(1.0 - abs(fract(x*0.5)*2.0 - 1.0), 0.0, 1.0);
       vec3 c = mix(ramp(t), vec3(1.0), uWash);
       vec2 g = vec2(px.x, px.y - uTop), cell = floor(g / uPitch), f = g - cell*uPitch; cell = mod(cell, 4096.0);
-      float dot = step(hash(cell), uDensity) * step(f.x, uDot) * step(f.y, uDot) * uDotA * smoothstep(0.04, 0.35, a);
+      // round, anti-aliased dots (hard squares flickered as the band moved by fractions of a pixel), and each one swells and
+      // shrinks with the colour flowing past it, so the grid moves with the gradient
+      float r = 0.575*uDot*(0.45 + 1.25*t), d = length(f - 0.5*uPitch);
+      float dot = step(hash(cell), uDensity) * clamp((r - d)*uDpr + 0.5, 0.0, 1.0) * uDotA * smoothstep(0.04, 0.35, a);
       c = mix(c, vec3(1.0), dot);
       c += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
       gl_FragColor = vec4(c*a, a);
