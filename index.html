@@ -359,6 +359,12 @@
     -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
   /* the band runs behind the phone's text */
   .m-list .m-intro{position:relative;z-index:5}
+  /* phones: nothing may widen the page sideways. The text's soft glow reached 88px past each side of the 227px statement
+     (≈403px), so the page could be dragged left and right. Trim the glows and clip any overflow on the x axis only. */
+  .m-list .statement-text::before{inset:-48px -20px}
+  .m-list .centre::before{inset:-16px -20px -48px}
+  html.m-list,html.m-list body{overflow-x:hidden;overflow-x:clip}
+  .m-list .m-intro,.m-list .stage{overflow-x:clip}
 </style>
 </head>
 <body>
