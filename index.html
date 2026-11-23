@@ -1830,21 +1830,22 @@
       if (cv.width !== W || cv.height !== H){ cv.width = W; cv.height = H; } gl.viewport(0, 0, W, H); dirtyB = true; };
     let dirtyB = true, shown = false, lastY = -1, prevY = 0, lastT = 0, flT = 0, flP = 0, rpT = 0, rpP = 0, wvT = 0, wvP = 0;
     addEventListener('resize', size); size();
-    const ease = x => -(Math.cos(Math.PI*x) - 1)/2;
     function tick(now){
       requestAnimationFrame(tick);
       if (!V || !secs.wkTop) return;
       const dt = Math.min(0.05, (now - (lastT || now))/1000); lastT = now;
       const y = getScrollY(), vh = innerHeight, vw = innerWidth, dy = (y - prevY)/vh; prevY = y;
-      // the stretch it plays over: from the end of the statement to the work's top edge near the top of the screen
-      const tEnd = secs.wkTop - vh*0.15;
-      let tStart;
-      if (isList(V)) tStart = (secs.stTop || 0) + (secs.stH || 0) - vh*0.4;
-      else { const C = V.Choreography; tStart = (C.heroOut*0.9 + C.statementIn + C.read - 0.2) * vh; }
-      if (tEnd - tStart < vh*0.5) tStart = tEnd - vh*0.8;
-      const prog = Math.min(1, Math.max(0, (y - tStart) / (tEnd - tStart)));
+      // the band leads the work up the page: its soft trailing edge sits just over the work's top edge, so there's never
+      // a stretch of empty white between them. It comes up over the fading statement and leaves as the work reaches the top.
       const thick = B.thickness*vh, reach = (B.wave + B.lobes)*vw + B.shapeHeight*Math.min(vh, vw) + B.stagger*Math.min(vh, vw);
-      const top = vh*1.02 + ((-thick - reach - 24) - vh*1.02) * ease(prog);
+      let top;
+      if (isList(V)){
+        // phones: the work follows the paragraph closely, so the band keeps its own pace, starting once the paragraph is read
+        const tEnd = secs.wkTop - vh*0.15, tStart = Math.min((secs.stTop || 0) + (secs.stH || 0) - vh*0.4, tEnd - vh*0.5);
+        const p = Math.min(1, Math.max(0, (y - tStart) / (tEnd - tStart)));
+        top = vh*1.02 + ((-thick - reach - 24) - vh*1.02) * (-(Math.cos(Math.PI*p) - 1)/2);
+      } else top = (secs.wkTop - y) - thick*(1 - B.fadeBottom*0.6) + vh*0.05;
+      const prog = top < vh && top + thick + reach > 0 ? 0.5 : (top >= vh ? 0 : 1);
       const on = prog > 0 && prog < 1;
       if (on !== shown){ shown = on; cv.style.visibility = on ? 'visible' : 'hidden'; if (!on){ gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT); } }
       if (!on){ flP = flT; rpP = rpT; wvP = wvT; lastY = y; return; }
