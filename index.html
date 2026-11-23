@@ -247,8 +247,6 @@
       background:#000;color:#fff;font-size:21px;box-shadow:inset 0 2px 11.7px rgba(37,79,232,.74),inset 2px -2px 12.5px #F48B3F}
     html:not(.m-list) .dock-cta:focus-visible{outline:0} .dock-cta:focus-visible span{outline:1px solid #fff;outline-offset:4px}
     html:not(.m-list) .edge-blur{display:none}
-    html:not(.m-list) .theme-toggle,html:not(.m-list) .motion-toggle{transition:color .15s ease,opacity .25s ease,visibility 0s}
-    html.bar-on:not(.m-list) .theme-toggle,html.bar-on:not(.m-list) .motion-toggle{opacity:0;visibility:hidden;transition:opacity .2s ease,visibility 0s .2s}
   }
   /* hero: a line under the text with a colour run travelling down it, three times */
   /* sits under the orbit, so cards pass over it rather than being cut by it */
@@ -258,7 +256,7 @@
   .stage.in .hero-cue{opacity:var(--co,1)}
   .hero-cue .line{position:absolute;inset:0;background:var(--wframe);overflow:hidden;
     -webkit-mask-image:linear-gradient(to bottom,transparent,#000 45%);mask-image:linear-gradient(to bottom,transparent,#000 45%)}
-  /* a soft-ended gradient run that keeps travelling down the line (Pause stops it) */
+  /* a soft-ended gradient run that keeps travelling down the line */
   .hero-cue .line i,.scroll-cue i::after{position:absolute;left:0;top:0;width:1px;height:60%;
     background:linear-gradient(transparent,#F58E3F 18%,#ED583E 34%,#F06F8A 50%,#8D5FB7 64%,#244EE7 82%,transparent);
     transform:translateY(-100%);animation:heroCue 2.2s cubic-bezier(.45,.05,.55,.95) 1s infinite}
@@ -271,17 +269,23 @@
     background:linear-gradient(to top,color-mix(in srgb,var(--bg) 85%,transparent) 0%,color-mix(in srgb,var(--bg) 55%,transparent) 30%,color-mix(in srgb,var(--bg) 0%,transparent) 100%)}
   .edge-blur.show{opacity:1}
   /* small UI text sits on a solid chip so it stays readable over whatever picture passes behind */
-  .caption,.hint,.theme-toggle,.motion-toggle{background:var(--bg)!important}
+  .caption,.hint,.theme-toggle{background:var(--bg)!important}
   .caption,.hint{padding:6px 10px}
   .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   .card:focus-visible{outline:2px solid var(--ink);outline-offset:6px}
-  .motion-toggle{position:fixed;top:24px;left:72px;z-index:300;background:none;border:0;padding:12px;margin:-12px;cursor:pointer;
-    font-family:"Geist Mono",monospace;font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:var(--mute);transition:color .15s ease}
-  .motion-toggle:hover{color:var(--ink)} .motion-toggle:focus-visible{outline:1px solid var(--ink);outline-offset:2px}
   .paused .scroll-cue i::after{animation-play-state:paused}
   /* theme toggle */
-  .theme-toggle{position:fixed;top:12px;left:12px;z-index:300;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:50%;cursor:pointer;
-    font-family:"Geist Mono",monospace;font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:var(--mute);transition:color .15s ease}
+  /* top right; it waits for the hero text, then dissolves in (opacity + blur). It dissolves away while you scroll down and
+     back in as soon as you scroll up; on desktop it stays away while the bottom bar (which has its own switch) is up */
+  .theme-toggle{position:fixed;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:300;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:50%;cursor:pointer;
+    font-family:"Geist Mono",monospace;font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:var(--mute);
+    opacity:0;visibility:hidden;filter:blur(6px);transform:scale(.96);
+    transition:color .15s ease,opacity .3s ease,filter .3s ease,transform .3s ease,visibility 0s .3s}
+  html.ui-in .theme-toggle{opacity:1;visibility:visible;filter:none;transform:none;
+    transition:color .15s ease,opacity .6s var(--ease-out-quad),filter .6s var(--ease-out-quad),transform .6s var(--ease-out-quad),visibility 0s}
+  html.ui-in.ui-hide .theme-toggle,html.ui-in.bar-on:not(.m-list) .theme-toggle{opacity:0;visibility:hidden;filter:blur(6px);transform:scale(.96);
+    transition:color .15s ease,opacity .3s ease,filter .3s ease,transform .3s ease,visibility 0s .3s}
+  @media (prefers-reduced-motion: reduce){ .theme-toggle,html.ui-in .theme-toggle{filter:none!important;transform:none!important} }
   .theme-toggle svg{width:20px;height:20px;display:block;transition:transform .3s var(--ease-out-expo)}
   .theme-toggle:active svg{transform:scale(.9) rotate(-15deg)}
   .theme-toggle:hover{color:var(--ink)} .theme-toggle:focus-visible{outline:1px solid var(--ink);outline-offset:2px}
@@ -337,7 +341,6 @@
 <body>
 
 <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark mode"></button>
-<button class="motion-toggle" id="motionToggle" type="button" aria-pressed="false">Pause</button>
 <main id="main">
 <section class="orbit-section" id="orbit" aria-label="Introduction">
   <div class="stage" id="stage">
@@ -1043,7 +1046,9 @@
     const wk = document.getElementById('works'), sy0 = scrollY;
     secs = { wkTop: wk.offsetTop };
     { const st = document.getElementById('statementText'), t = st.style.transform; st.style.transform = 'none';
-      const r = st.getBoundingClientRect(); secs.stTop = r.top + sy0; secs.stH = r.height; st.style.transform = t; }
+      const r = st.getBoundingClientRect(); secs.stTop = r.top + sy0; secs.stH = r.height; st.style.transform = t;
+      const sc = document.querySelector('.scroll-cue'), t2 = sc.style.transform; sc.style.transform = 'none';
+      secs.scTop = sc.getBoundingClientRect().top + sy0; sc.style.transform = t2; }
     cellRects = {}; nCells = 0;
     workCells = [...document.querySelectorAll('.wcell')].filter(c => !c.hidden);
     const saved = workCells.map(cell => cell.style.transform);
@@ -1112,17 +1117,11 @@
   const statementEl = document.getElementById('statementText'), worksEl = document.getElementById('works');
   const heroCue = document.getElementById('heroCue'), dock = document.getElementById('dock'), edgeBlur = document.getElementById('edgeBlur');
   const caseBg = document.getElementById('caseBg'), caseInfo = document.getElementById('caseInfo'), caseClose = document.getElementById('caseClose');
-  let lastFocus = null, paused = false;
-  const motionBtn = document.getElementById('motionToggle');
-  motionBtn.addEventListener('click', () => {
-    paused = !paused;
-    motionBtn.textContent = paused ? 'Play' : 'Pause'; motionBtn.setAttribute('aria-pressed', String(paused));
-    document.documentElement.classList.toggle('paused', paused);
-  });
-  if (reduce){ motionBtn.hidden = true; }
+  let lastFocus = null, paused = false, uiLastY = 0, uiHide = false;
+  const scrollCueEl = document.querySelector('.scroll-cue');
   // while a piece is open, everything else is inert: focus stays in the view and screen readers only see it
   function setInertOutside(on, keep){
-    ['works','dock','themeToggle','motionToggle','centre','statementText'].forEach(id => { const e = document.getElementById(id); if (e) e.inert = on; });
+    ['works','dock','themeToggle','centre','statementText'].forEach(id => { const e = document.getElementById(id); if (e) e.inert = on; });
     cards.forEach((c, j) => { c.el.inert = on && j !== keep; });
   }
   function openCase(i){
@@ -1666,7 +1665,8 @@
     }
 
     // ---- text + chrome
-    if (it >= tText && !centre.classList.contains('in')){ centre.classList.add('in'); stage.classList.add('in'); }
+    if (it >= tText && !centre.classList.contains('in')){ centre.classList.add('in'); stage.classList.add('in');
+      setTimeout(() => document.documentElement.classList.add('ui-in'), reduce ? 0 : 650); }   // the switch follows the hero text in
     const away = clamp(g*2.5) , exAway = clamp(exP*2.5);
     if (isList(V)){
       put(centre, 'opacity', '1'); put(centre, 'filter', 'none'); put(centre, 'pointerEvents', '');
@@ -1743,6 +1743,10 @@
       const k = reduce ? 1 : easeOutQuint(clamp((cvh*0.95 - stTopV) / (cvh*0.3)));
       put(statementEl, 'opacity', q(k, 0.01).toFixed(2));
       statementEl.style.transform = k >= 1 ? 'none' : `translateY(${((1-k)*20).toFixed(1)}px)`;
+      // and the line + "Scroll down for works" under it, the same way
+      const k2 = reduce ? 1 : easeOutQuint(clamp((cvh*0.95 - ((secs.scTop || 0) - wy)) / (cvh*0.3)));
+      put(scrollCueEl, 'opacity', q(k2, 0.01).toFixed(2));
+      put(scrollCueEl, 'transform', k2 >= 1 ? 'none' : `translateY(${((1-k2)*20).toFixed(1)}px)`);
     } else {
     const stOut = clamp(mph*3);
     put(statementEl, 'opacity', q(stIn * (1 - stOut), 0.005).toFixed(3));
@@ -1759,6 +1763,10 @@
       put(cell, 'willChange', (k >= 1 || k <= 0 || reduce) ? 'auto' : 'transform, opacity');   // a layer only while it moves
     }
     // ---- dock + edge blur appear once the work is on screen
+    // theme switch: away while scrolling down, dissolves back on the way up (6px of travel decides, so jitter doesn't flicker it)
+    const sdy = y - uiLastY;
+    if (y < 60 || Math.abs(sdy) > 6){ const hide = y >= 60 && sdy > 0; uiLastY = y;
+      if (hide !== uiHide){ uiHide = hide; document.documentElement.classList.toggle('ui-hide', hide); } }
     const showDock = y + vh*0.6 > secs.wkTop;
     if (dock._on !== showDock){ dock._on = showDock; dock.classList.toggle('show', showDock); document.documentElement.classList.toggle('bar-on', showDock); edgeBlur.classList.toggle('show', showDock); if (exId === -1) dock.inert = !showDock; }
     if (F.gradient && F.gradientSpin){ gAngle = ((gAngle ?? F.gradientAngle) + F.gradientSpin*dt) % 360; paintFrame(gAngle); } else gAngle = null;
