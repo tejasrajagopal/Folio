@@ -9,6 +9,7 @@
 <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
 <meta name="author" content="Tejas Rajagopal">
 <meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="only light">   <!-- browsers must not auto-darken the site; dark only by the visitor's own switch -->
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="alternate" type="text/markdown" href="https://tejasrajagopal.com/llms.txt" title="LLM-friendly summary">
@@ -892,13 +893,16 @@
   addEventListener('resize', () => { if (V && isMobile(V) !== wasMobile){ applyStatic(V); } });
 
   // ---- theme: panel sets the default; the on-page toggle overrides it for this visitor
-  let themePick = null; try { themePick = localStorage.getItem('orbitTheme'); } catch(e){}
+  // light unless the visitor switches: a manual choice lasts for this visit only (sessionStorage), and the old
+  // remembered choice from earlier versions is cleared, so every new visit opens in light mode
+  let themePick = null;
+  try { localStorage.removeItem('orbitTheme'); themePick = sessionStorage.getItem('orbitTheme'); } catch(e){}
   const sysDark = matchMedia('(prefers-color-scheme: dark)');
   const isDark = v => { const m = themePick || v.Theme.mode; return m === 'dark' || (m === 'system' && sysDark.matches); };
   sysDark.addEventListener && sysDark.addEventListener('change', () => V && applyStatic(V));
   const swapTheme = () => {
     themePick = isDark(V) ? 'light' : 'dark';
-    try { localStorage.setItem('orbitTheme', themePick); } catch(e){}
+    try { sessionStorage.setItem('orbitTheme', themePick); } catch(e){}
     applyStatic(V);
   };
   // light ⇄ dark: the screen blurs, the theme swaps while it's soft, then it comes back into focus
@@ -936,7 +940,7 @@
     set('--line', dark ? T.darkLine : '#ececec');
     set('--wframe', dark ? T.darkFrame : '#d5d5d5'); set('--whandle', dark ? T.darkFrame : '#d5d5d5'); set('--cellline', dark ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.16)');
     set('--dummy', dark ? '#1c1c1c' : v.Dummies.fill);
-    document.documentElement.style.colorScheme = dark ? 'dark' : 'light';   // scrollbars etc. follow the site's theme, not the OS
+    document.documentElement.style.colorScheme = dark ? 'dark' : 'only light';   // scrollbars etc. follow the site's theme, not the OS
     ['themeToggle','dockTheme'].forEach(id => { const tt = document.getElementById(id);
     tt.innerHTML = dark ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 0 1 9.4 4a8.2 8.2 0 1 0 10.6 10.6Z"/></svg>';
     tt.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode'); tt.hidden = !T.showToggle; });
