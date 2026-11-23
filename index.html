@@ -313,7 +313,7 @@
   .m-list .orbit-section{height:auto}
   .m-list .stage{position:relative;height:auto;min-height:100vh;min-height:100svh;display:flex;align-items:center;justify-content:center;padding:64px 0}
   .m-list .centre{position:relative;left:auto;top:auto;transform:none}
-  .m-list .hero-cue{display:block}
+  .m-list .hero-cue{display:none}   /* phones: the band takes this space (Figma "iPhone 16 – 20") */
   .m-intro{display:none}
   .m-list .m-intro{display:flex;flex-direction:column;align-items:center;gap:56px;padding:8px 0 72px}
   .m-list .statement-text{position:relative;left:auto;top:auto;z-index:1;transform:none}
@@ -358,7 +358,7 @@
   .m-list .statement-text .st > span.g{background:linear-gradient(100deg,#F58E3F 0%,#ED583E 29%,#F06F8A 51%,#8D5FB7 63%,#244EE7 100%);
     -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
   /* the band runs behind the phone's text */
-  .m-list .m-intro{position:relative;z-index:5}
+  .m-list .m-intro{position:relative;z-index:5;padding-top:34vh}   /* room for the band between the hero and the statement */
   /* phones: nothing may widen the page sideways. The text's soft glow reached 88px past each side of the 227px statement
      (≈403px), so the page could be dragged left and right. Trim the glows and clip any overflow on the x axis only. */
   .m-list .statement-text::before{inset:-48px -20px}
@@ -1088,7 +1088,9 @@
     { const st = document.getElementById('statementText'), t = st.style.transform; st.style.transform = 'none';
       const r = st.getBoundingClientRect(); secs.stTop = r.top + sy0; secs.stH = r.height; st.style.transform = t;
       const sc = document.querySelector('.scroll-cue'), t2 = sc.style.transform; sc.style.transform = 'none';
-      secs.scTop = sc.getBoundingClientRect().top + sy0; sc.style.transform = t2; }
+      secs.scTop = sc.getBoundingClientRect().top + sy0; sc.style.transform = t2;
+      const ct = document.getElementById('cta'), cr = ct.getBoundingClientRect(), cm = new DOMMatrix(getComputedStyle(ct).transform);
+      secs.ctaBot = cr.bottom - cm.m42 + sy0; }
     cellRects = {}; nCells = 0;
     workCells = [...document.querySelectorAll('.wcell')].filter(c => !c.hidden);
     const saved = workCells.map(cell => cell.style.transform);
@@ -1879,15 +1881,21 @@
       const y = getScrollY(), vh = innerHeight, vw = innerWidth, dy = (y - prevY)/vh; prevY = y;
       // the band leads the work up the page: its soft trailing edge sits just over the work's top edge, so there's never
       // a stretch of empty white between them. It comes up over the fading statement and leaves as the work reaches the top.
-      const thick = B.thickness*vh, reach = (B.wave + B.lobes)*vw + B.shapeHeight*Math.min(vh, vw) + B.stagger*Math.min(vh, vw);
+      const list = isList(V), sc0 = Math.min(vh, vw);
+      // phones: a gentler curve and no stagger, so the whole band fits the gap it lives in
+      const shapeH = list ? 0.16 : B.shapeHeight, stag = list ? 0 : B.stagger;
+      let thick = B.thickness*vh;
+      const reach = (B.wave + B.lobes)*vw + shapeH*sc0 + stag*sc0;
       let top;
       if (isList(V)){
         // phones: the work follows the paragraph closely, so the band keeps its own pace, starting once the paragraph is read
         // phones (Figma "iPhone 16 – 20/21"): it already peeks in at the bottom of the first screen, then rises behind the
         // paragraph and has gone by the time the paragraph sits in the middle of the screen
-        const tEnd = Math.max(vh*0.6, (secs.stTop || 0) + (secs.stH || 0)/2 - vh*0.5 + vh*0.35);
-        const p = Math.min(1, Math.max(0, y / tEnd));
-        top = (centre.classList.contains('in') ? vh*0.72 : vh*1.05) + ((-thick - reach - 24) - vh*0.72) * (-(Math.cos(Math.PI*p) - 1)/2);
+        // phones: the band has its own space between "Get in touch" and the statement and scrolls with the page, so it
+        // never runs behind text: its top sits 28px under the link, its lowest point stays 32px above the statement
+        const from = (secs.ctaBot || 0) + 28, to = (secs.stTop || 0) - 32 - (B.wave + B.lobes)*vw - shapeH*sc0;
+        thick = Math.max(vh*0.2, to - from);
+        top = centre.classList.contains('in') ? from - y : vh*1.05;
       } else top = (secs.wkTop - y) - thick*(1 - B.fadeBottom*0.6) + vh*0.05;
       const prog = top < vh && top + thick + reach > 0 ? 0.5 : (top >= vh ? 0 : 1);
       const on = prog > 0 && prog < 1;
@@ -1899,12 +1907,12 @@
       const moving = reduce ? false : true;    // flow + ripple keep a slow drift while the band is on screen
       if (!moving && !dirtyB && y === lastY) return;
       dirtyB = false; lastY = y;
-      gl.uniform2f(U.uRes, W, H); gl.uniform1f(U.uDpr, dpr); gl.uniform1f(U.uTop, top); gl.uniform1f(U.uThick, B.thickness);
+      gl.uniform2f(U.uRes, W, H); gl.uniform1f(U.uDpr, dpr); gl.uniform1f(U.uTop, top); gl.uniform1f(U.uThick, thick/vh);
       gl.uniform1f(U.uWave, B.wave); gl.uniform1f(U.uWaves, B.waves); gl.uniform1f(U.uLobes, B.lobes);
       gl.uniform1f(U.uFadeT, B.fadeTop); gl.uniform1f(U.uFadeB, B.fadeBottom); gl.uniform1f(U.uWash, B.wash);
       gl.uniform1f(U.uPitch, B.pitch); gl.uniform1f(U.uDot, B.dotSize); gl.uniform1f(U.uDensity, B.density); gl.uniform1f(U.uDotA, B.dotOpacity);
-      gl.uniform1f(U.uBarW, B.barWidth); gl.uniform1f(U.uTilt, B.tilt); gl.uniform1f(U.uShapeH, B.shapeHeight);
-      gl.uniform1f(U.uRipple, B.ripple); gl.uniform1f(U.uRipPh, rpP); gl.uniform1f(U.uStag, B.stagger*Math.min(1, Math.max(0, top/vh)));
+      gl.uniform1f(U.uBarW, B.barWidth); gl.uniform1f(U.uTilt, B.tilt); gl.uniform1f(U.uShapeH, shapeH);
+      gl.uniform1f(U.uRipple, B.ripple); gl.uniform1f(U.uRipPh, rpP); gl.uniform1f(U.uStag, stag*Math.min(1, Math.max(0, top/vh)));
       gl.uniform1f(U.uFlRings, B.flowRings); gl.uniform1f(U.uFlPh, flP); gl.uniform1f(U.uWvPh, wvP);
       gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
