@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Horizon transition — prototype</title>
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<style>
+  @font-face{font-family:"JejuMyeongjo";src:url(../../fonts/JejuMyeongjo.woff2) format("woff2");font-weight:400;font-display:swap}
+  @font-face{font-family:"Geist Mono";src:url(../../fonts/GeistMono-Light.woff2) format("woff2");font-weight:300;font-display:swap}
+  @font-face{font-family:"Geist Mono";src:url(../../fonts/GeistMono-Regular.woff2) format("woff2");font-weight:400;font-display:swap}
+  @font-face{font-family:"Geist Mono";src:url(../../fonts/GeistMono-Medium.woff2) format("woff2");font-weight:500;font-display:swap}
+  :root{--bg:#ffffff;--ink:#141414;--dark:#05070d;--ease:cubic-bezier(.19,1,.22,1)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  body{font-family:"Geist Mono",monospace}
+
+  /* ---- page */
+  .intro{min-height:100svh;display:grid;place-items:center;padding:96px 24px;text-align:center}
+  .intro p{font-family:"JejuMyeongjo",serif;font-size:clamp(24px,3.4vw,34px);line-height:138%;letter-spacing:-.03em;max-width:430px;text-align:justify}
+  .intro small{display:block;margin-top:40px;font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:color-mix(in srgb,var(--ink) 55%,transparent);text-align:center}
+
+  /* the transition: a tall section, its stage pinned while the horizon plays */
+  .hz{position:relative}
+  .hz-stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden}
+  .hz canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  /* headlines wait for their section to settle, then rise in on their own (never caught halfway) */
+  .hz-copy{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,86vw);text-align:center;color:#fff;pointer-events:none}
+  .hz-copy h2{font-family:"JejuMyeongjo",serif;font-weight:400;font-size:clamp(30px,4.4vw,45px);line-height:110%;letter-spacing:-.03em}
+  .hz-copy p{margin-top:18px;font-size:14px;font-weight:300;color:rgba(255,255,255,.62)}
+  .rise > *{opacity:0;transform:translateY(14px);filter:blur(4px);transition:opacity .5s ease,transform .5s ease,filter .5s ease}
+  .rise.in > *{opacity:1;transform:none;filter:none;transition:opacity .9s var(--ease),transform .9s var(--ease),filter .9s var(--ease)}
+  .rise.in > *:nth-child(2){transition-delay:.12s}
+  .glow-only .hz-copy{color:var(--ink)} .glow-only .hz-copy p{color:color-mix(in srgb,var(--ink) 60%,transparent)}
+
+  .works{padding:0 24px 120px}
+  .works-head{position:relative;z-index:1;text-align:center;margin:-38vh 0 18vh}
+  .works-head h2{font-family:"JejuMyeongjo",serif;font-weight:400;font-size:clamp(30px,4.4vw,45px);letter-spacing:-.03em}
+  .works-head p{margin-top:14px;font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:color-mix(in srgb,var(--ink) 55%,transparent)}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;max-width:1100px;margin:0 auto}
+  .grid img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#eee}
+  @media (max-width:700px){ .grid{grid-template-columns:1fr} }
+
+  /* ---- controls */
+  .panel{position:fixed;top:12px;right:12px;z-index:50;width:300px;max-height:calc(100vh - 24px);overflow:auto;
+    background:rgba(20,20,22,.88);color:#eee;border-radius:12px;font-size:11px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  .panel header{position:sticky;top:0;display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(20,20,22,.96);border-bottom:1px solid rgba(255,255,255,.08);cursor:pointer;user-select:none}
+  .panel header b{font-weight:500;text-transform:uppercase;letter-spacing:.04em;flex:1}
+  .panel header .pct{font-variant-numeric:tabular-nums;color:#9a9a9a}
+  .panel.closed .body{display:none}
+  .panel .body{padding:6px 12px 12px}
+  .panel h3{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:#8a8a8a;margin:12px 0 6px}
+  .row{display:grid;grid-template-columns:96px 1fr 44px;align-items:center;gap:8px;min-height:26px}
+  .row label{color:#cfcfcf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row output{text-align:right;font-variant-numeric:tabular-nums;color:#9a9a9a}
+  .row input[type=range]{width:100%;accent-color:#F58E3F}
+  .row select{grid-column:2 / span 2;background:#2a2a2d;color:#eee;border:0;border-radius:6px;padding:4px 6px;font:inherit}
+  .row input[type=checkbox]{justify-self:start;accent-color:#F58E3F}
+  .swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+  .swatches input,.row input[type=color]{width:100%;height:24px;border:0;border-radius:4px;padding:0;background:none;cursor:pointer}
+  .btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .btns button{flex:1 1 auto;background:#2a2a2d;color:#eee;border:0;border-radius:6px;padding:7px 8px;font:inherit;cursor:pointer}
+  .btns button:hover{background:#38383c}
+  .hint{margin-top:10px;color:#7a7a7a;line-height:1.5}
+  .scrub{position:fixed;left:0;bottom:0;height:2px;background:#F58E3F;z-index:49;transform-origin:left;transform:scaleX(0)}
+  @media (max-width:700px){ .panel{left:8px;right:8px;top:auto;bottom:8px;width:auto;max-height:55vh} }
+</style>
+</head>
+<body>
+
+<section class="intro">
+  <div>
+    <p>Every startup starts as a story. I help founders tell it through brand, product and marketing, so the idea feels real from day one.</p>
+    <small>Scroll ↓ — horizon transition prototype</small>
+  </div>
+</section>
+
+<section class="hz" id="hz">
+  <div class="hz-stage">
+    <canvas id="cv"></canvas>
+    <div class="hz-copy rise" id="midCopy"><h2>Some of my work</h2><p>A few favourites from the archive.</p></div>
+  </div>
+</section>
+
+<section class="works">
+  <div class="works-head rise" id="endCopy"><h2>Selected work</h2><p>2021 — 2026</p></div>
+  <div class="grid">
+    <img src="../../works/01.webp" alt=""><img src="../../works/02.webp" alt="">
+    <img src="../../works/05.webp" alt=""><img src="../../works/07.webp" alt="">
+    <img src="../../works/12.webp" alt=""><img src="../../works/15.webp" alt="">
+  </div>
+</section>
+
+<div class="scrub" id="scrub"></div>
+
+<aside class="panel" id="panel">
+  <header id="panelHead"><b>Horizon</b><span class="pct" id="pct">0%</span><span>▾</span></header>
+  <div class="body" id="controls"></div>
+</aside>
+
+<script>
+(() => {
+  // ---------- settings ----------
+  const PALETTES = {
+    folio:   ['#FFF6E6','#FFD089','#F58E3F','#ED583E','#F06F8A','#8D5FB7'],
+    sunrise: ['#FFFBF2','#FFE3A3','#FFB04A','#F7752F','#E2483A','#C9364F'],
+    night:   ['#F4FBFF','#BFE6FF','#6FB6FF','#3F6FE8','#4B3FB8','#2A1F6B'],
+    ember:   ['#FFF1E0','#FFC07A','#FF7A3D','#E0412E','#A9233A','#5E1630'],
+    mint:    ['#F4FFF8','#C7F5D9','#7BE0A8','#2FB892','#1F8A8A','#1B4F72'],
+  };
+  const DEFAULTS = {
+    scrollLength: 320,   // vh of scrolling the transition takes
+    hold: 0.16,          // share of it spent on the full dark, headline showing
+    easing: 'inOutCubic',
+    curve: 0.24,         // how round the horizon starts: how far the edge drops at the screen's sides, × screen width
+    flatten: 0.85,       // how much it straightens as it fills the screen (1 = dead flat)
+    exitCurve: 0.19,     // roundness as it lifts away (× width)
+    glow: 0.34,          // glow reach, × screen height (on tall phones, capped by the width)
+    thin: 0.6,           // glow gets shorter toward the sides
+    sideHeat: 0.22,      // sides start further down the ramp (already orange-red)
+    intensity: 1.0,
+    softness: 0.45,      // where the glow starts fading into the page (lower = longer fade)
+    rim: 1.2,            // px, the hairline on the edge
+    haze: 0.35,          // faint blue just inside the edge
+    hazeWidth: 60,       // px
+    band: 0.12,          // how much of the glow is still tucked off-screen at the end (0 = whole band hangs in view)
+    keepBand: true,      // end on the sunrise glow over the next section (off: it all lifts away)
+    darkMiddle: true,    // off: no dark planet, only the glowing curve over the light page
+    palette: 'folio',
+    stops: PALETTES.folio.slice(),
+    dark: '#05070d',
+    page: '#ffffff',
+    rimSide: '#5B8CFF',
+    res: 1,              // render scale (× device pixels, capped at 2)
+  };
+  const KEY = 'hz-proto-v2';
+  let S = Object.assign({}, DEFAULTS);
+  try { const h = location.hash.slice(1); if (h) Object.assign(S, JSON.parse(decodeURIComponent(atob(h)))); else Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch(e){}
+
+  // ---------- controls ----------
+  const C = document.getElementById('controls');
+  const defs = [
+    ['h','Timing'],
+    ['range','scrollLength','Scroll length',120,800,10,'vh'],
+    ['range','hold','Dark hold',0,0.5,0.01],
+    ['select','easing','Easing',['linear','inOutCubic','inOutSine','outQuint','inOutExpo']],
+    ['h','Shape'],
+    ['range','curve','Curve depth',0.01,0.45,0.005],
+    ['range','flatten','Flatten',0,1,0.01],
+    ['range','exitCurve','Exit curve',0.01,0.45,0.005],
+    ['h','Glow'],
+    ['range','glow','Glow height',0.05,0.9,0.01],
+    ['range','thin','Side thinning',0,0.95,0.01],
+    ['range','sideHeat','Side heat',0,0.7,0.01],
+    ['range','intensity','Intensity',0,1.5,0.01],
+    ['range','softness','Fade start',0.05,0.9,0.01],
+    ['select','palette','Palette',Object.keys(PALETTES).concat(['custom'])],
+    ['stops'],
+    ['h','Edge'],
+    ['range','rim','Rim width',0,4,0.1,'px'],
+    ['color','rimSide','Rim (sides)'],
+    ['range','haze','Inner haze',0,1,0.01],
+    ['range','hazeWidth','Haze width',5,200,1,'px'],
+    ['h','Ending'],
+    ['check','keepBand','Glow stays'],
+    ['range','band','Band tucked',0,0.9,0.01],
+    ['h','Look'],
+    ['check','darkMiddle','Dark middle'],
+    ['color','dark','Dark'],
+    ['color','page','Page'],
+    ['range','res','Resolution',0.25,2,0.05,'×'],
+  ];
+  const inputs = {};
+  const fmt = (v, step, unit) => (step >= 1 ? Math.round(v) : (+v).toFixed(2)) + (unit || '');
+  for (const d of defs){
+    if (d[0] === 'h'){ const h = document.createElement('h3'); h.textContent = d[1]; C.appendChild(h); continue; }
+    if (d[0] === 'stops'){
+      const w = document.createElement('div'); w.className = 'swatches';
+      inputs.stops = [...Array(6)].map((_, i) => { const x = document.createElement('input'); x.type = 'color'; x.title = ['edge','hot','warm','red','tail','fade'][i];
+        x.addEventListener('input', () => { S.stops[i] = x.value; S.palette = 'custom'; inputs.palette.value = 'custom'; changed(); }); w.appendChild(x); return x; });
+      C.appendChild(w); continue;
+    }
+    const [type, key, label] = d, row = document.createElement('div'); row.className = 'row';
+    const lab = document.createElement('label'); lab.textContent = label; row.appendChild(lab);
+    let el;
+    if (type === 'range'){
+      const [, , , min, max, step, unit] = d; el = document.createElement('input'); Object.assign(el, { type:'range', min, max, step });
+      const out = document.createElement('output'); row.append(el, out);
+      el.addEventListener('input', () => { S[key] = +el.value; out.textContent = fmt(S[key], step, unit); changed(key); });
+      el._sync = () => { el.value = S[key]; out.textContent = fmt(S[key], step, unit); };
+    } else if (type === 'select'){
+      el = document.createElement('select'); d[3].forEach(o => { const op = document.createElement('option'); op.value = op.textContent = o; el.appendChild(op); }); row.appendChild(el);
+      el.addEventListener('input', () => { S[key] = el.value; if (key === 'palette' && PALETTES[el.value]) S.stops = PALETTES[el.value].slice(); changed(key); });
+      el._sync = () => { el.value = S[key]; };
+    } else if (type === 'check'){
+      el = document.createElement('input'); el.type = 'checkbox'; row.appendChild(el);
+      el.addEventListener('input', () => { S[key] = el.checked; changed(key); }); el._sync = () => { el.checked = !!S[key]; };
+    } else if (type === 'color'){
+      el = document.createElement('input'); el.type = 'color'; row.appendChild(el);
+      el.addEventListener('input', () => { S[key] = el.value; changed(key); }); el._sync = () => { el.value = S[key]; };
+    }
+    inputs[key] = el; C.appendChild(row);
+  }
+  const btns = document.createElement('div'); btns.className = 'btns';
+  const mk = (t, f) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.addEventListener('click', f); btns.appendChild(b); return b; };
+  mk('Replay', () => { scrollTo({ top: hz.offsetTop - innerHeight*0.5, behavior:'instant' }); setTimeout(() => scrollTo({ top: hz.offsetTop + hz.offsetHeight - innerHeight, behavior:'smooth' }), 60); });
+  mk('Top', () => scrollTo({ top: 0, behavior:'smooth' }));
+  const copyBtn = mk('Copy settings', async () => { const txt = JSON.stringify(S, null, 2);
+    try { await navigator.clipboard.writeText(txt); copyBtn.textContent = 'Copied ✓'; } catch(e){ prompt('Settings', txt); } setTimeout(() => copyBtn.textContent = 'Copy settings', 1400); });
+  const linkBtn = mk('Copy link', async () => { const url = location.href.split('#')[0] + '#' + btoa(encodeURIComponent(JSON.stringify(S)));
+    try { await navigator.clipboard.writeText(url); linkBtn.textContent = 'Copied ✓'; } catch(e){ prompt('Link', url); } setTimeout(() => linkBtn.textContent = 'Copy link', 1400); });
+  mk('Reset', () => { S = Object.assign({}, DEFAULTS, { stops: PALETTES.folio.slice() }); syncAll(); changed('all'); });
+  C.appendChild(btns);
+  const hint = document.createElement('p'); hint.className = 'hint'; hint.innerHTML = 'Scroll the page to play it. <b>H</b> hides this panel. Settings are kept in this browser; “Copy link” shares them.'; C.appendChild(hint);
+
+  const panel = document.getElementById('panel');
+  document.getElementById('panelHead').addEventListener('click', () => panel.classList.toggle('closed'));
+  if (matchMedia('(max-width:700px)').matches) panel.classList.add('closed');
+  addEventListener('keydown', e => { if (e.key === 'h' || e.key === 'H') panel.hidden = !panel.hidden; });
+
+  function syncAll(){ for (const k in inputs) if (inputs[k] && inputs[k]._sync) inputs[k]._sync(); inputs.stops.forEach((x, i) => x.value = S.stops[i]); }
+  function changed(key){
+    if (key === 'palette' || key === 'all') inputs.stops.forEach((x, i) => x.value = S.stops[i]);
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
+    if (key === 'scrollLength' || key === 'all') layout();
+    if (key === 'res' || key === 'all') resize();
+    document.documentElement.style.setProperty('--bg', S.page);
+    document.documentElement.style.setProperty('--ink', lum(S.page) > 0.5 ? '#141414' : '#f0eee9');
+    document.body.classList.toggle('glow-only', !S.darkMiddle);
+    dirty = true;
+  }
+  syncAll();
+
+  // ---------- easing ----------
+  const E = {
+    linear: t => t,
+    inOutCubic: t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2,
+    inOutSine: t => -(Math.cos(Math.PI*t) - 1)/2,
+    outQuint: t => 1 - Math.pow(1 - t, 5),
+    inOutExpo: t => t === 0 ? 0 : t === 1 ? 1 : t < .5 ? Math.pow(2, 20*t - 10)/2 : (2 - Math.pow(2, -20*t + 10))/2,
+  };
+  const clamp = (x, a=0, b=1) => Math.min(b, Math.max(a, x)), lerp = (a, b, t) => a + (b - a)*t;
+  const hexRGB = h => { const n = parseInt(h.slice(1), 16); return [(n>>16&255)/255, (n>>8&255)/255, (n&255)/255]; };
+  const lum = h => { const [r,g,b] = hexRGB(h); return 0.2126*r + 0.7152*g + 0.0722*b; };
+
+  // ---------- WebGL ----------
+  const cv = document.getElementById('cv');
+  const gl = cv.getContext('webgl', { premultipliedAlpha:false, antialias:false });
+  const hz = document.getElementById('hz'), midCopy = document.getElementById('midCopy'), endCopy = document.getElementById('endCopy');
+  const pct = document.getElementById('pct'), scrub = document.getElementById('scrub');
+  if (!gl){ hz.querySelector('.hz-stage').insertAdjacentHTML('beforeend', '<p style="position:absolute;inset:auto 0 24px;text-align:center">WebGL is off in this browser.</p>'); return; }
+
+  // Everything is worked out per pixel from one circle: the planet's limb. d = signed distance to the limb
+  // (negative inside the planet). Outside, the glow runs from the limb out through the colour ramp and fades
+  // into the page; it reaches furthest and starts hottest in the middle, thinner and already red at the sides.
+  const FS = `
+  precision highp float;
+  uniform vec2 uRes; uniform vec2 uC; uniform float uR, uDpr, uDir;
+  uniform float uGlow, uThin, uHeat, uInt, uSoft, uRim, uHaze, uHazeW, uDarkOn;
+  uniform vec3 uS0, uS1, uS2, uS3, uS4, uS5, uDark, uPage, uRimSide;
+  vec3 ramp(float t){
+    if (t < 0.12) return mix(uS0, uS1, t/0.12);
+    if (t < 0.30) return mix(uS1, uS2, (t-0.12)/0.18);
+    if (t < 0.50) return mix(uS2, uS3, (t-0.30)/0.20);
+    if (t < 0.72) return mix(uS3, uS4, (t-0.50)/0.22);
+    return mix(uS4, uS5, clamp((t-0.72)/0.28, 0.0, 1.0));
+  }
+  void main(){
+    vec2 p = gl_FragCoord.xy;                       // device px, y up
+    float d = length(p - uC) - uR;                  // signed distance to the limb
+    d = min(d, uDir*(p.y - uC.y));                  // past the circle's middle it's all planet (tall screens)
+    float side = clamp(abs(p.x - uRes.x*0.5) / (uRes.x*0.5), 0.0, 1.5);
+    float reach = uGlow * max(0.12, 1.0 - uThin*side*side);
+    float t = max(d, 0.0) / reach + uHeat*side*side;   // position along the ramp
+    float a = (1.0 - smoothstep(uSoft, 1.0, t)) * uInt;
+    a *= smoothstep(-1.0*uDpr, 0.5*uDpr, d);          // glow only outside
+    vec3 col = mix(uPage, ramp(clamp(t, 0.0, 1.0)), clamp(a, 0.0, 1.0));
+    // inside: the night side, a faint blue haze just under the edge
+    vec3 dark = mix(uPage, uDark, uDarkOn);
+    vec3 hazeC = mix(uRimSide, vec3(1.0), 0.15);
+    dark = mix(dark, hazeC, uHaze * uDarkOn * exp(d / uHazeW) * 0.55);
+    float inside = 1.0 - smoothstep(-0.75*uDpr, 0.75*uDpr, d);   // anti-aliased limb
+    col = mix(col, dark, inside);
+    // the hairline rim: white where the sun is, blue toward the sides
+    if (uRim > 0.0){
+      float rim = 1.0 - smoothstep(uRim*0.5, uRim*0.5 + uDpr, abs(d + uRim*0.5));
+      vec3 rc = mix(vec3(1.0), uRimSide, smoothstep(0.08, 0.75, side));
+      col = mix(col, rc, rim * 0.9);
+    }
+    gl_FragColor = vec4(col, 1.0);
+  }`;
+  const VS = 'attribute vec2 a; void main(){ gl_Position = vec4(a, 0.0, 1.0); }';
+  const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(o); return o; };
+  const prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  const U = {}; ['uRes','uC','uR','uDpr','uDir','uGlow','uThin','uHeat','uInt','uSoft','uRim','uHaze','uHazeW','uDarkOn','uS0','uS1','uS2','uS3','uS4','uS5','uDark','uPage','uRimSide'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+
+  let W = 0, H = 0, dpr = 1, dirty = true, secTop = 0, secLen = 1;
+  function resize(){
+    dpr = Math.min(2, (devicePixelRatio || 1) * S.res);
+    W = Math.max(1, Math.round(cv.clientWidth * dpr)); H = Math.max(1, Math.round(cv.clientHeight * dpr));
+    if (cv.width !== W || cv.height !== H){ cv.width = W; cv.height = H; }
+    gl.viewport(0, 0, W, H); dirty = true;
+  }
+  function layout(){
+    hz.style.height = (S.scrollLength + 100) + 'vh';
+    secTop = hz.getBoundingClientRect().top + scrollY; secLen = Math.max(1, hz.offsetHeight - innerHeight); dirty = true;
+  }
+  addEventListener('resize', () => { layout(); resize(); });
+
+  // A circle through the apex with sagitta s over the screen's width: R = W²/(8s) + s/2.
+  // Rising (the planet below): centre under the apex. Lifting away (the planet above): centre over it.
+  function limb(apexY, sag, above){
+    const s = Math.max(0.5, sag), R = (W*W)/(8*s) + s/2;
+    return { cx: W/2, cy: above ? apexY + R : apexY - R, R, dir: above ? -1 : 1 };
+  }
+
+  let lastP = -1;
+  function frame(){
+    requestAnimationFrame(frame);
+    const p = clamp((scrollY - secTop) / secLen);
+    if (!dirty && p === lastP) return;            // nothing moved: no redraw
+    dirty = false; lastP = p;
+    const ez = E[S.easing] || E.inOutCubic, hold = clamp(S.hold, 0, 0.9), a = (1 - hold)/2;
+    const glowPx = S.glow * Math.min(H, W*1.1);
+    const sagOf = k => Math.min(0.45, k) * W;               // a horizon, never a ball: the drop stays under half the width
+    let L, phase;
+    if (p <= a){
+      // rising: the edge comes up from below and flattens, as if coming down toward the planet
+      const e = ez(clamp(p / a));
+      const sag = sagOf(S.curve) * (1 - S.flatten*e);
+      const apex0 = -glowPx*0.35, apex1 = H + sag + 2*dpr;       // ends with even the corners covered
+      L = limb(lerp(apex0, apex1, e), sag, false); phase = e >= 1 ? 'hold' : 'in';
+    } else if (p < a + hold){
+      L = limb(H*4, 1, false); phase = 'hold';                     // all night side
+    } else {
+      // lifting away: the edge hangs from the top; the corners clear first, then it straightens
+      const e = ez(clamp((p - a - hold) / Math.max(1e-4, a)));
+      const sag = sagOf(S.exitCurve) * (1 - S.flatten*e);
+      const sag0 = sagOf(S.exitCurve);
+      const apex0 = -sag0 - 2*dpr;                                  // starts with the whole screen covered
+      const apex1 = S.keepBand ? H + S.band*glowPx : H + sag + glowPx*1.15;
+      L = limb(lerp(apex0, apex1, e), sag, true); phase = e >= 1 ? 'done' : 'out';
+    }
+    gl.uniform2f(U.uRes, W, H); gl.uniform2f(U.uC, L.cx, L.cy); gl.uniform1f(U.uR, L.R); gl.uniform1f(U.uDir, L.dir); gl.uniform1f(U.uDpr, dpr);
+    gl.uniform1f(U.uGlow, Math.max(1, glowPx)); gl.uniform1f(U.uThin, S.thin); gl.uniform1f(U.uHeat, S.sideHeat);
+    gl.uniform1f(U.uInt, S.intensity); gl.uniform1f(U.uSoft, Math.min(0.98, S.softness)); gl.uniform1f(U.uRim, S.rim*dpr);
+    gl.uniform1f(U.uHaze, S.haze); gl.uniform1f(U.uHazeW, Math.max(1, S.hazeWidth*dpr)); gl.uniform1f(U.uDarkOn, S.darkMiddle ? 1 : 0);
+    S.stops.forEach((h, i) => gl.uniform3fv(U['uS'+i], hexRGB(h)));
+    gl.uniform3fv(U.uDark, hexRGB(S.dark)); gl.uniform3fv(U.uPage, hexRGB(S.page)); gl.uniform3fv(U.uRimSide, hexRGB(S.rimSide));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    // headlines: in once their section has settled, out as soon as it moves again
+    midCopy.classList.toggle('in', p >= a - 0.005 && p <= a + hold + 0.005);
+    endCopy.classList.toggle('in', p >= 0.985);
+    pct.textContent = Math.round(p*100) + '% · ' + phase;
+    scrub.style.transform = `scaleX(${p.toFixed(4)})`;
+  }
+  changed('all'); layout(); resize(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
