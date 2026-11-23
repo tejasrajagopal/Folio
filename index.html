@@ -342,11 +342,16 @@
   .m-list .dock-cta{flex:none;width:160px;height:46px;justify-content:center;margin:0;padding:0;border-radius:0;background:#000;color:#fff;border:.5px solid #F58E3F;
     font-family:"Geist Mono",monospace;font-size:16px;letter-spacing:-.03em;text-transform:uppercase}
   .m-top{display:none}
-  .m-list .m-top{display:flex;justify-content:space-between;gap:16px;position:fixed;z-index:200;top:calc(9px + env(safe-area-inset-top,0px));left:calc(9px + env(safe-area-inset-left,0px));
-    width:min(321px,calc(100vw - 72px));padding:0 15px;background:var(--bg);border:.5px solid var(--wframe);border-radius:8px;
-    opacity:0;transform:translateY(-8px);pointer-events:none;transition:opacity .3s var(--ease-out-expo),transform .4s var(--ease-out-expo)}
+  /* Figma "iPhone 16 – 23": a full-width white bar with a hairline along its bottom; the filters sit in a tab with rounded top
+     corners standing on that line, at the left, leaving room for the theme switch on the right */
+  .m-list .m-top{display:flex;align-items:flex-end;position:fixed;z-index:200;top:0;left:0;right:0;
+    height:calc(59px + env(safe-area-inset-top,0px));padding:0 0 0 calc(9px + env(safe-area-inset-left,0px));
+    background:var(--bg);border-bottom:.5px solid var(--wframe);
+    opacity:0;transform:translateY(-100%);pointer-events:none;transition:opacity .3s var(--ease-out-expo),transform .45s var(--ease-out-expo)}
   .m-list .m-top.show{opacity:1;transform:none;pointer-events:auto}
-  .m-top button{background:none;border:0;padding:13px 0;min-height:48px;cursor:pointer;font-family:"Geist Mono",monospace;font-size:16px;letter-spacing:-.03em;
+  .m-tabs{display:flex;justify-content:space-between;gap:16px;width:min(321px,calc(100vw - 72px));height:50px;padding:0 15px;
+    background:var(--bg);border:.5px solid var(--wframe);border-bottom:0;border-radius:8px 8px 0 0}
+  .m-top button{background:none;border:0;padding:0;min-height:48px;align-self:stretch;display:flex;align-items:center;cursor:pointer;font-family:"Geist Mono",monospace;font-size:16px;letter-spacing:-.03em;
     line-height:1.38;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 60%,transparent)}
   .m-top button[aria-pressed="true"]{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
   .m-top button:focus-visible{outline:1px solid var(--ink);outline-offset:2px}
@@ -430,11 +435,11 @@
     <a class="dock-cta" id="dockCta" href="#"><span>Get in touch</span></a>
   </div>
 </nav>
-<nav class="m-top" id="mTop" aria-label="Filter work">
+<nav class="m-top" id="mTop" aria-label="Filter work"><div class="m-tabs">
   <button type="button" data-filter="all" aria-pressed="true">All</button>
   <button type="button" data-filter="projects" aria-pressed="false">Projects</button>
   <button type="button" data-filter="experiments" aria-pressed="false">Experiments</button>
-</nav>
+</div></nav>
 <div class="edge-blur" id="edgeBlur"></div>
 <div class="pixel-wrap" id="pixelWrap" aria-hidden="true"></div>
 <div class="case-bg" id="caseBg"></div>
