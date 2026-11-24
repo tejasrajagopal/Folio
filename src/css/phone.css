@@ -1,0 +1,79 @@
+  /* ---- phones */
+  @media (max-width:700px){
+    /* iPhone 16 frames: logo → 47 → [name/sub → 35 → years → 35 → cta] */
+    h1{font-size:40px}
+    .mark{width:75.38px}
+    .centre{gap:32px;width:min(362px,92vw)} .c-top{gap:48px} .c-text{gap:32px;width:281px} .c-name{gap:24px;width:281px}
+    .sub{font-size:16px} .years{gap:8px} .years small{font-size:12px} .logos{width:281px;height:auto;font-size:12px} .cta{font-size:14px}
+    .statement-text{font-size:21px;line-height:138%;text-align:justify;width:225px}
+    .wcell{padding:40px 6vw 32px;gap:22px} .wtitle{font-size:20px}
+    .dock{bottom:16px;height:52px;max-width:94vw} .dock-logo{padding:0 12px} .dock-logo svg{width:44px}
+    .dock-tabs{gap:6px;padding-right:8px} .dock-tabs button{font-size:14px;min-height:44px;padding:0 6px} .dock-cta{font-size:16px;padding:0 14px;white-space:nowrap}
+    .edge-blur{height:150px}
+  }
+  @media (hover:none){ .hint{display:none} }
+  /* ---- phone list layout: no orbit — hero, a scroll cue, then the work with a bottom bar */
+  .scroll-cue{display:none}
+  .m-list .ring,.m-list .caption,.m-list .hint,.m-list .progress{display:none}
+  /* phones: the hero is centred in the first screen, with the gradient line under "Get in touch" as the scroll hint;
+     then the paragraph (moved out of the stage into .m-intro by JS) reads in as you scroll, then the line + "Scroll down for works" */
+  .m-list .orbit-section{height:auto}
+  .m-list .stage{position:relative;height:auto;min-height:100vh;min-height:100svh;display:flex;align-items:center;justify-content:center;padding:64px 0}
+  .m-list .centre{position:relative;left:auto;top:auto;transform:none}
+  .m-list .hero-cue{display:none}   /* phones: the band takes this space (Figma "iPhone 16 – 20") */
+  .m-intro{display:none}
+  .m-list .m-intro{display:flex;flex-direction:column;align-items:center;gap:56px;padding:8px 0 72px}
+  .m-list .statement-text{position:relative;left:auto;top:auto;z-index:1;transform:none}
+  .m-list h1{font-size:44px}
+  @media (max-width:700px){ .m-list h1{white-space:normal;width:6.2em;margin:0 auto} }   /* two lines on phones only */
+  .m-list .sub{font-size:16px}
+  .m-list .scroll-cue{display:flex;flex-direction:column;align-items:center;gap:58px;
+    font-family:"Geist Mono",monospace;font-weight:300;font-size:14px;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 70%,transparent);white-space:nowrap}
+  /* the line: a quiet travelling highlight that says "keep going" (constant motion → linear) */
+  .scroll-cue i{position:relative;display:block;width:1px;height:128px;background:var(--wframe);overflow:hidden}
+  .scroll-cue i::after{content:""}
+  @keyframes cue{to{transform:translateY(250%)}}
+  @media (prefers-reduced-motion: reduce){ .scroll-cue i::after{animation:none;display:none} }
+  .m-list .works{margin-top:0}
+  .m-list .wcell{padding:30px 42px 22px;gap:18px}
+  .m-list .wtitle{font-size:16px}
+  /* phones (Figma "iPhone 16 – 23"): a frosted bar at the bottom (Works · About · Get in touch) and the filters in a box at the top */
+  .m-list .dock{bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(353px,calc(100vw - 32px));max-width:none;height:auto;gap:4px;padding:4px;
+    background:color-mix(in srgb,var(--bg) 70%,transparent);border:.5px solid color-mix(in srgb,var(--bg) 100%,transparent);box-shadow:0 4px 4px rgba(0,0,0,.09);
+    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+  .m-list .dock-logo,.m-list .dock-tabs{display:none}
+  .m-list .dock-right{display:flex;align-items:stretch;gap:16px;width:100%}
+  .m-list .dock-works,.m-list .dock-about{display:flex;align-items:center;min-height:45px;font-family:"Geist Mono",monospace;font-size:16px;letter-spacing:-.03em;
+    line-height:1.38;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 70%,transparent);text-decoration:none}
+  .m-list .dock-works{margin-left:auto;text-decoration:underline;text-underline-offset:3px} .m-list .dock-about{margin-right:auto}
+  .m-list .dock-cta{flex:none;width:160px;height:46px;justify-content:center;margin:0;padding:0;border-radius:0;background:#000;color:#fff;border:.5px solid #F58E3F;
+    font-family:"Geist Mono",monospace;font-size:16px;letter-spacing:-.03em;text-transform:uppercase}
+  .m-top{display:none}
+  /* Figma "iPhone 16 – 23": a full-width white bar with a hairline along its bottom; the filters sit in a tab with rounded top
+     corners standing on that line, at the left, leaving room for the theme switch on the right */
+  .m-list .m-top{display:flex;align-items:flex-end;position:fixed;z-index:200;top:0;left:0;right:0;
+    height:calc(59px + env(safe-area-inset-top,0px));padding:0 0 0 calc(9px + env(safe-area-inset-left,0px));
+    background:var(--bg);border-bottom:.5px solid var(--wframe);
+    opacity:0;transform:translateY(-100%);pointer-events:none;transition:opacity .3s var(--ease-out-expo),transform .45s var(--ease-out-expo)}
+  .m-list .m-top.show{opacity:1;transform:none;pointer-events:auto}
+  .m-tabs{display:flex;justify-content:space-between;gap:16px;width:min(321px,calc(100vw - 72px));height:50px;padding:0 15px;
+    background:var(--bg);border:.5px solid var(--wframe);border-bottom:0;border-radius:8px 8px 0 0}
+  .m-top button{background:none;border:0;padding:0;min-height:48px;align-self:stretch;display:flex;align-items:center;cursor:pointer;font-family:"Geist Mono",monospace;font-size:16px;letter-spacing:-.03em;
+    line-height:1.38;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 60%,transparent)}
+  .m-top button[aria-pressed="true"]{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+  .m-top button:focus-visible{outline:1px solid var(--ink);outline-offset:2px}
+  @media (max-width:360px){ .m-top button{font-size:14px} }
+  /* the glow the band leaves behind the bottom bar */
+  .m-list .edge-blur{height:150px;background:linear-gradient(to top,color-mix(in srgb,#8D5FB7 55%,transparent) 0%,color-mix(in srgb,#F58E3F 42%,transparent) 32%,color-mix(in srgb,#F58E3F 0%,transparent) 100%)}
+  /* statement (Figma "iPhone 16 – 21"): 22px, each word capitalised, the first sentence in the gradient */
+  .m-list .statement-text{font-size:22px;width:227px;letter-spacing:-.03em}
+  .m-list .statement-text .st > span.g{background:linear-gradient(100deg,#F58E3F 0%,#ED583E 29%,#F06F8A 51%,#8D5FB7 63%,#244EE7 100%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+  /* the band runs behind the phone's text */
+  .m-list .m-intro{position:relative;z-index:5;padding-top:34vh}   /* room for the band between the hero and the statement */
+  /* phones: nothing may widen the page sideways. The text's soft glow reached 88px past each side of the 227px statement
+     (≈403px), so the page could be dragged left and right. Trim the glows and clip any overflow on the x axis only. */
+  .m-list .statement-text::before{inset:-48px -20px}
+  .m-list .centre::before{inset:-16px -20px -48px}
+  html.m-list,html.m-list body{overflow-x:hidden;overflow-x:clip}
+  .m-list .m-intro,.m-list .stage{overflow-x:clip}

@@ -1,0 +1,189 @@
+  /* fonts are subset to Latin (basic + Latin-1 + punctuation + arrows) */
+  @font-face{font-family:"JejuMyeongjo";src:url(fonts/JejuMyeongjo.woff2) format("woff2");font-weight:400;font-display:swap}
+  @font-face{font-family:"Geist Mono";src:url(fonts/GeistMono-Light.woff2) format("woff2");font-weight:300;font-display:swap}
+  @font-face{font-family:"Geist Mono";src:url(fonts/GeistMono-Regular.woff2) format("woff2");font-weight:400;font-display:swap}
+  @font-face{font-family:"Geist Mono";src:url(fonts/GeistMono-Medium.woff2) format("woff2");font-weight:500;font-display:swap}
+  @font-face{font-family:"Geist Pixel";src:url(fonts/GeistPixel-Square.woff2) format("woff2");font-weight:400;font-display:swap}
+  :root{
+    --bg:#ffffff; --ink:#141414; --mute:#7a766f; --line:#ececec; --wframe:#dcdcdc; --whandle:#cfcfcf; --radius:6px; --name:45; --hover:1.06;
+    --fc:#000; --fc2:#000; --fa:135deg; --fbw:1; --htl:#000; --htr:#000; --hbl:#000; --hbr:#000; --hs:8; --ho:1; --lc:#8a8a8a; --ls:10; --lg:6;
+    --dummy:#e3e3e3; --dummyInk:#9a9a9a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  html{scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ink) 26%,transparent) var(--bg)}   /* quiet, theme-matched scrollbar */
+  /* the intro lock blocks input instead of hiding overflow, so the scrollbar never disappears and reappears */
+  html.lenis:not(.lenis-autoToggle).lenis-stopped{overflow:visible}
+  body{font-family:"Inter Tight",system-ui,sans-serif}
+
+  .stage{cursor:grab;touch-action:pan-y pinch-zoom} .stage.dragging{cursor:grabbing} .stage.dragging .card{cursor:grabbing}
+  .orbit-section{height:420vh;position:relative}
+  .stage{position:sticky;top:0;height:100vh;overflow:hidden}
+  .ring{position:absolute;inset:0;pointer-events:none;z-index:1}
+  .grid-head{position:absolute;left:50%;top:0;z-index:2;font-family:"JejuMyeongjo",serif;font-weight:400;font-size:32px;letter-spacing:-.03em;line-height:108%;
+    opacity:0;pointer-events:none;white-space:nowrap}
+  /* case view */
+  .case-bg{position:fixed;inset:0;background:var(--bg);opacity:0;z-index:300;pointer-events:none}
+  .case-bg.open{pointer-events:auto}
+  .case-info{position:fixed;left:50%;z-index:450;display:flex;gap:16px;align-items:baseline;transform:translateX(-50%);opacity:0;pointer-events:none;
+    font-family:"Geist Mono",monospace;font-size:13px;color:color-mix(in srgb,var(--ink) 70%,transparent);white-space:nowrap}
+  .case-info b{font-family:"JejuMyeongjo",serif;font-weight:400;font-size:24px;letter-spacing:-.03em;color:var(--ink)}
+  .case-close{position:fixed;top:20px;left:20px;z-index:460;font-family:"Geist Mono",monospace;font-size:13px;text-transform:uppercase;
+    background:none;border:0;color:var(--ink);cursor:pointer;padding:12px;margin:-12px;opacity:0;pointer-events:none;transition:transform .15s var(--ease-out-quad)}
+  .case-close:active{transform:scale(.97)} .case-close:focus-visible{outline:1px solid var(--ink);outline-offset:2px}
+
+  /* card = media + frame overlay */
+  .card{position:absolute;left:50%;top:50%;pointer-events:auto;cursor:inherit;will-change:transform,opacity;--s:1;--fo:1;--sh:0}
+  /* shadow lives on a pseudo-element and only its opacity animates (compositor-only, no per-frame repaint) */
+  .card::before{content:"";position:absolute;inset:0;box-shadow:0 30px 60px -28px rgba(20,16,10,.9);opacity:var(--sh);pointer-events:none}
+  .card.hidden{display:none}
+  /* WebGL orbit: one canvas draws every card; the DOM cards stay as the fallback */
+  .ring canvas.gl-orbit{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
+  .ring.gl > .card{display:none}
+  .media{position:absolute;inset:0;border-radius:var(--radius);overflow:hidden;background:var(--dummy)}
+  .media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;
+    user-select:none;-webkit-user-drag:none;transition:transform .2s ease}
+  :root{--ease-out-expo:cubic-bezier(.19,1,.22,1);--ease-out-quad:cubic-bezier(.25,.46,.45,.94);--ease-in-out-cubic:cubic-bezier(.645,.045,.355,1)}
+  /* the far-away look (soft + grey) is drawn once per card and crossfaded in by depth — opacity is cheap to animate,
+     a live blur on 17 moving images is not */
+  .media .far{position:absolute;inset:0;width:100%;height:100%;opacity:0;pointer-events:none;transition:transform .2s ease}
+  @media (hover:hover) and (pointer:fine){ .card:hover .media img,.card:hover .media .far{transform:scale(var(--hover))} }
+  /* press feedback: felt, not seen. Applied to children because the card's own transform is driven per frame */
+  .card .media,.card .frame{transition:transform .15s var(--ease-out-quad)}
+  .card:active .media,.card:active .frame{transform:scale(.98)}
+  .media .dlabel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:"Geist Mono",monospace;font-size:calc(11px / var(--s));letter-spacing:.06em;color:var(--dummyInk);text-transform:uppercase}
+
+  .frame{position:absolute;inset:0;pointer-events:none;opacity:var(--fo)}
+  .stage:not(.ready) .frame{transition:opacity .4s ease}
+  /* exit: frames fade once via CSS (driving --fo/--s per frame restyled every handle and cost ~half the frames) */
+  .stage.exiting .frame{opacity:0;visibility:hidden;transition:opacity .2s ease-out,visibility 0s .2s}
+  .card-select{position:absolute;left:50%;top:50%;pointer-events:none;--s:1;--fo:1;opacity:0}
+  .stage:not(.ready) .card-select{transition:opacity .4s ease}
+  .frame b{position:absolute;inset:0;border-radius:var(--radius);padding:calc(var(--fbw) * 1px / var(--s));
+    background:linear-gradient(var(--fa), var(--fc), var(--fc2));
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+    mask:linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)}
+  .frame i{position:absolute;width:calc(var(--hs) * 1px / var(--s));height:calc(var(--hs) * 1px / var(--s));
+    --o:calc(var(--hs) * var(--ho) * -1px / var(--s))}
+  .frame i.tl{top:var(--o);left:var(--o);background:var(--htl)} .frame i.tr{top:var(--o);right:var(--o);background:var(--htr)}
+  .frame i.bl{bottom:var(--o);left:var(--o);background:var(--hbl)} .frame i.br{bottom:var(--o);right:var(--o);background:var(--hbr)}
+  .frame span{position:absolute;left:0;bottom:100%;margin-bottom:calc(var(--lg) * 1px / var(--s));
+    font-family:"Inter Tight",system-ui,sans-serif;font-weight:500;font-size:calc(var(--ls) * 1px / var(--s));color:var(--lc);white-space:nowrap;line-height:1}
+  .noHandles .frame i, .noLabel .frame span{display:none}
+  .noBorder .frame b{display:none}
+
+  .centre{position:absolute;left:50%;top:calc(50% - 2.2vh);transform:translate(-50%,-50%);z-index:50;text-align:center;   /* optical centre: a touch above the geometric middle */
+    width:min(92vw,900px);pointer-events:none;will-change:opacity,transform,filter}
+  .centre{display:flex;flex-direction:column;align-items:center;gap:48px;width:min(92vw,469px)}
+  .c-top{display:flex;flex-direction:column;align-items:center;gap:40px;align-self:stretch}
+  .c-text{display:flex;flex-direction:column;align-items:center;gap:40px;width:362px;max-width:100%}
+  .c-name{display:flex;flex-direction:column;align-items:center;gap:20px;width:454px;max-width:92vw}
+  /* a soft pool of page colour under the text, so contrast never depends on which picture passes behind */
+  .centre::before,.statement-text::before{content:"";position:absolute;inset:-56px -88px;z-index:-1;pointer-events:none;
+    background:radial-gradient(closest-side,var(--bg) 72%,color-mix(in srgb,var(--bg) 0%,transparent))}
+  .centre::before{inset:-16px -88px -56px}   /* less glow above the logo, so back cards there aren't washed into ghosts */
+  /* the hero's colour pool only appears with the text, so it never hides the intro logo */
+  .centre::before{opacity:0;transition:opacity .6s ease} .centre.in::before{opacity:1}
+  .mark{width:97.55px;height:auto;display:block}
+  .mark path{fill:var(--ink)}
+  h1{font-family:"JejuMyeongjo",serif;font-weight:400;font-size:min(calc(var(--name) * 1px),11vw);line-height:108%;letter-spacing:-.03em;text-transform:capitalize;color:var(--ink);white-space:nowrap}
+  .sub{font-family:"Geist Mono",monospace;font-weight:300;font-size:16px;line-height:145%;text-align:center;text-transform:capitalize;
+       color:color-mix(in srgb,var(--ink) 70%,transparent);align-self:stretch}
+  .years{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;align-self:stretch}
+  .years small{font-family:"Geist Pixel","Geist Mono",monospace;font-size:14px;line-height:118%;letter-spacing:.02em;text-transform:uppercase;
+       color:color-mix(in srgb,var(--ink) 70%,transparent)}
+  .logos{display:flex;align-items:center;justify-content:space-between;width:338.3px;height:16.35px;color:var(--ink);
+       font-family:"Inter Tight",system-ui,sans-serif;font-weight:700;font-size:12px;letter-spacing:-.01em}
+  .logos img{height:16.35px;width:auto;display:block}
+  .logos span:nth-child(3){font-style:italic}
+  .cta{font-family:"Geist Mono",monospace;font-weight:500;font-size:16px;line-height:130%;text-align:center;text-decoration:underline;
+       text-underline-offset:3px;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 70%,transparent);pointer-events:auto;align-self:stretch}
+  .cta{display:inline-block;transition:color .15s ease,transform .15s var(--ease-out-quad);position:relative}
+  .cta::before{content:"";position:absolute;inset:-14px -12px}   /* ≥44px tap area */
+  .cta:hover{color:var(--ink)} .cta:active{transform:scale(.97)}
+  .cta:focus-visible{outline:1px solid var(--ink);outline-offset:4px}
+  .caption{font-size:12px !important;position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:200;
+    font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    display:flex;gap:10px;align-items:center;white-space:nowrap}
+  .caption[hidden]{display:none}
+  .caption .fig{color:var(--mute)}
+  /* caption crossfade with a small directional hint: exits up fast, enters from below */
+  .caption .name,.caption .fig{display:inline-block;transition:opacity .22s var(--ease-out-expo),transform .22s var(--ease-out-expo),filter .22s var(--ease-out-expo)}
+  .caption.out .name,.caption.out .fig{opacity:0;transform:translateY(-4px);filter:blur(2px);transition-duration:.12s;transition-timing-function:var(--ease-out-quad)}
+  .caption.pre .name,.caption.pre .fig{opacity:0;transform:translateY(4px);filter:blur(2px);transition:none}
+  .progress{position:absolute;left:50%;top:22px;transform:translateX(-50%);z-index:200;width:120px;height:1px;background:color-mix(in srgb,var(--ink) 14%,transparent)}
+  .progress i{display:block;height:100%;width:100%;background:var(--ink);transform:scaleX(0);transform-origin:left center}
+  .hint{position:absolute;left:16px;bottom:18px;z-index:200;font-family:"Geist Mono",monospace;font-size:12px;color:var(--mute);letter-spacing:.02em}
+  .intro-mark{position:absolute;left:50%;top:50%;width:97.55px;overflow:visible;z-index:80;pointer-events:none;transform-origin:50% 50%;will-change:transform,opacity}
+  .intro-mark path{fill:var(--ink);stroke:none}
+  /* Tide: centre-line pens inside masks write the mark (oval: two pens meet on the right; wave, then the curl peels off the crest) */
+  .intro-mark .pen{fill:none;stroke:#fff;stroke-width:5;stroke-linejoin:round;stroke-dasharray:1 1;stroke-dashoffset:1}
+  .intro-mark #penTop,.intro-mark #penBot{stroke-width:7}
+  /* text entrance: one orchestrated, staggered rise (CSS transitions, not per-frame JS) */
+  /* hero text: staggered by importance — the name leads with the most travel and time; the logo row only fades */
+  .centre .rise{opacity:0;transform:translateY(var(--y,8px));
+    transition:opacity var(--dur,.7s) var(--ease-out-expo) var(--d,0s),transform var(--dur,.7s) var(--ease-out-expo) var(--d,0s)}
+  .centre.in .rise{opacity:1;transform:none}
+  .chrome{opacity:0;transition:opacity .6s ease .5s}
+  .stage.in .chrome{opacity:1}
+  /* reduced motion: gentler, not zero — keep the fades, drop the movement */
+  @media (prefers-reduced-motion: reduce){ .centre .rise{transform:none;transition:opacity .4s ease var(--d,0s)} }
+
+  /* statement: pinned while its words read in, then the work slides up over it */
+  /* statement lives in the pinned stage, inside the orbit */
+  .statement-text{position:absolute;left:50%;top:50%;z-index:150;opacity:0;pointer-events:none;transform:translate(-50%,-50%);width:min(425px,86vw);font-family:"JejuMyeongjo",serif;font-weight:400;font-size:34px;line-height:138%;letter-spacing:-.03em;
+    text-align:justify;text-transform:none;color:var(--ink)}
+  /* gradient lives on an inner block so it paints above the colour pool behind the text */
+  .statement-text .st-g{position:absolute;inset:0;pointer-events:none;background:radial-gradient(95.97% 27.64% at 15.76% 8.41%,#F58E3F 0%,#ED583E 29.25%,#F06F8A 51.47%,#8D5FB7 62.81%,#244EE7 100%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .statement-text .st i{font-style:normal}
+  .statement-text .st > span.g{-webkit-text-fill-color:transparent;color:transparent} .statement-text .st-g > span{visibility:hidden} .statement-text .st-g > span.g{visibility:visible}
+  /* work grid */
+  /* the grid rises over the pinned stage; transparent so the orbit cards can land in its frames */
+  /* the gradient band: a fixed WebGL layer that sweeps up between the statement and the work (over the stage, under the work) */
+  .band-cv{position:absolute;left:0;top:0;width:100%;height:0;z-index:4;pointer-events:none;visibility:hidden}   /* placed in the page by JS: it scrolls with the content */
+  .works{position:relative;z-index:5;margin-top:-25vh}   /* starts rising just as the last cards clear */
+  .wg{display:grid;grid-template-columns:1fr 1fr}
+  .wcell{display:flex;flex-direction:column;align-items:center;gap:30px;padding:43px 3.7vw 33px;border-bottom:.5px solid var(--cellline)}
+  .wcell:nth-child(odd){border-right:.5px solid var(--cellline)}
+  .wcell[hidden]{display:none}
+  .wframe{position:relative;width:100%;aspect-ratio:614/338;border:1px solid var(--wframe)}
+  .wframe .wimg{position:absolute;inset:0;overflow:hidden}
+  .wframe img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s ease}
+  @media (hover:hover) and (pointer:fine){ .wcell:hover .wframe img{transform:scale(1.02)} }
+  .wframe i{position:absolute;width:8px;height:8px;background:var(--whandle)}
+  /* handles sit just outside each corner, touching it diagonally */
+  .wframe i:nth-of-type(1){top:-9px;left:-9px} .wframe i:nth-of-type(2){top:-9px;right:-9px}
+  .wframe i:nth-of-type(3){bottom:-9px;left:-9px} .wframe i:nth-of-type(4){bottom:-9px;right:-9px}
+  .wtitle{font-family:"JejuMyeongjo",serif;font-weight:400;font-size:26px;letter-spacing:-.03em;line-height:138%}
+  .wempty{grid-column:1/-1;padding:120px 0;text-align:center;font-family:"Geist Mono",monospace;font-size:14px;color:color-mix(in srgb,var(--ink) 60%,transparent)}
+  .works-end{height:200px}
+  @media (max-width:800px){ .wg{grid-template-columns:1fr} .wcell:nth-child(odd){border-right:0} }
+  /* dock */
+  .dock{position:fixed;left:50%;bottom:77px;z-index:200;display:flex;align-items:stretch;height:60px;background:var(--bg);border:1px solid var(--wframe);
+    transform:translate(-50%,12px);opacity:0;pointer-events:none;transition:opacity .3s var(--ease-out-expo),transform .4s var(--ease-out-expo)}
+  .dock.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .dock-logo{display:flex;align-items:center;padding:0 40px 0 20px}
+  .dock-logo svg{width:60px;height:auto;display:block} .dock-logo path{fill:var(--ink)}
+  .dock-tabs{display:flex;align-items:center;gap:30px;padding-right:28px}
+  .dock-tabs button{background:none;border:0;padding:8px 0;cursor:pointer;font-family:"Geist Mono",monospace;font-size:16px;text-transform:uppercase;
+    color:color-mix(in srgb,var(--ink) 70%,transparent);transition:color .15s ease}
+  .dock-tabs button:hover,.dock-tabs button[aria-pressed="true"]{color:var(--ink)}
+  .dock-tabs button[aria-pressed="true"]{text-decoration:underline;text-underline-offset:3px}
+  .dock-cta{display:flex;align-items:center;padding:0 29px;margin:-1px -1px -1px 0;background:var(--ink);color:var(--bg);text-decoration:none;
+    font-family:"JejuMyeongjo",serif;font-size:20px;letter-spacing:-.03em;transition:transform .15s var(--ease-out-quad)}
+  .dock-cta:active{transform:scale(.97)}
+  .dock button:focus-visible,.dock a:focus-visible{outline:1px solid var(--ink);outline-offset:3px}
+  /* nav hover: letters wave through the gradient one after another, then settle back to their own colour */
+  .nav-wave i{font-style:normal}
+  #name{pointer-events:auto;cursor:default}   /* the name takes the hover wave too */
+  #name i{text-transform:none}   /* capitalize would treat every letter as a word once split */
+  .nav-wave.waving i{animation:navWave .75s cubic-bezier(.25,.46,.45,.94) calc(var(--i) * 32ms) both}
+  @keyframes navWave{18%{color:#F58E3F} 34%{color:#ED583E} 50%{color:#F06F8A} 66%{color:#8D5FB7} 82%{color:#244EE7}}
+  @media (prefers-reduced-motion: reduce){ .nav-wave.waving i{animation:none} }
+  /* theme change: a soft blur over the switch */
+  .pixel-wrap{position:fixed;inset:0;z-index:1000;pointer-events:none;opacity:0;
+    -webkit-backdrop-filter:blur(var(--tb,12px));backdrop-filter:blur(var(--tb,12px));transition:opacity .25s cubic-bezier(.645,.045,.355,1)}
+  .pixel-wrap.on{opacity:1}
+  .dock-right{display:contents} .dock-about,.dock-theme,.dock-works{display:none}
