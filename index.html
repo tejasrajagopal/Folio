@@ -1832,13 +1832,14 @@
     const cv = document.getElementById('bandCv');
     const gl = cv && cv.getContext('webgl', { antialias:false, premultipliedAlpha:true, alpha:true });
     if (!gl) return;
-    const B = { thickness:.78, wave:.055, waves:1, lobes:.015, fadeTop:.32, fadeBottom:.22, wash:.22,
+    const B = { thickness:.78, wave:.055, waves:1, lobes:.015, fadeTop:.32, fadeBottom:.22, wash:0, blur:120, grain:.43,   // blur + grain: the Figma layer blur (120) and mono noise (white, 43%)
       pitch:6, dotSize:1.6, density:.62, dotOpacity:.85, barWidth:33, tilt:8, shapeHeight:.28, stagger:.35,
       ripple:.025, rippleSpeed:.5, rippleScroll:1.5, flowRings:1.4, flowSpeed:.12, flowScroll:1, travelScroll:.5, settle:.6,
       stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'] };
     const FS = `
     precision highp float;
-    uniform vec2 uRes; uniform float uDpr, uTop, uThick, uWave, uWaves, uLobes, uFadeT, uFadeB, uWash;
+    uniform vec2 uRes; uniform float uGrain;
+    uniform float uDpr, uTop, uThick, uWave, uWaves, uLobes, uFadeT, uFadeB, uWash;
     uniform float uPitch, uDot, uDensity, uDotA, uBarW, uTilt, uShapeH, uRipple, uRipPh, uStag, uFlRings, uFlPh, uWvPh;
     uniform vec3 uS0, uS1, uS2, uS3, uS4;
     float hash(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }   // no sin(): stays random on every GPU (sin of big numbers collapsed into a solid row of dots on some)
@@ -1858,6 +1859,9 @@
       float t = (v - uFadeT*0.35) / (1.0 - uFadeT*0.35 - uFadeB*0.35);
       float x = t*uFlRings - uFlPh; t = clamp(1.0 - abs(fract(x*0.5)*2.0 - 1.0), 0.0, 1.0);
       vec3 c = mix(ramp(t), vec3(1.0), uWash);
+      // the Figma noise: mono, white at 43%, density 100%, very fine — every other device pixel at random takes a white
+      // speck, which is what gives the band its soft pastel grain (in place of a flat white wash)
+      c = mix(c, vec3(1.0), uGrain * step(0.5, hash(gl_FragCoord.xy + 17.0)));
       vec2 g = vec2(px.x, px.y - uTop), cell = floor(g / uPitch), f = g - cell*uPitch; cell = mod(cell, 4096.0);
       // round, anti-aliased dots (hard squares flickered as the band moved by fractions of a pixel), and each one swells and
       // shrinks with the colour flowing past it, so the grid moves with the gradient
@@ -1874,7 +1878,7 @@
     gl.useProgram(prog);
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    const U = {}; ['uRes','uDpr','uTop','uThick','uWave','uWaves','uLobes','uFadeT','uFadeB','uWash','uPitch','uDot','uDensity','uDotA','uBarW','uTilt','uShapeH','uRipple','uRipPh','uStag','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
+    const U = {}; ['uRes','uGrain','uDpr','uTop','uThick','uWave','uWaves','uLobes','uFadeT','uFadeB','uWash','uPitch','uDot','uDensity','uDotA','uBarW','uTilt','uShapeH','uRipple','uRipPh','uStag','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
       .forEach(n => U[n] = gl.getUniformLocation(prog, n));
     const rgb = h => { const n = parseInt(h.slice(1), 16); return [(n>>16&255)/255, (n>>8&255)/255, (n&255)/255]; };
     B.stops.forEach((h, i) => gl.uniform3fv(U['uS'+i], rgb(h)));
@@ -1918,7 +1922,9 @@
       dirtyB = false; lastY = y;
       gl.uniform2f(U.uRes, W, H); gl.uniform1f(U.uDpr, dpr); gl.uniform1f(U.uTop, top); gl.uniform1f(U.uThick, thick/vh);
       gl.uniform1f(U.uWave, B.wave); gl.uniform1f(U.uWaves, B.waves); gl.uniform1f(U.uLobes, B.lobes);
-      gl.uniform1f(U.uFadeT, B.fadeTop); gl.uniform1f(U.uFadeB, B.fadeBottom); gl.uniform1f(U.uWash, B.wash);
+      // edges as soft as the Figma layer blur: ~2× the blur radius of fade on each side, whatever the band's height
+      const soft = Math.min(0.45, (B.blur*2) / Math.max(1, thick));
+      gl.uniform1f(U.uFadeT, Math.max(B.fadeTop, soft)); gl.uniform1f(U.uFadeB, Math.max(B.fadeBottom, soft)); gl.uniform1f(U.uWash, B.wash); gl.uniform1f(U.uGrain, B.grain);
       gl.uniform1f(U.uPitch, B.pitch); gl.uniform1f(U.uDot, B.dotSize); gl.uniform1f(U.uDensity, B.density); gl.uniform1f(U.uDotA, B.dotOpacity);
       gl.uniform1f(U.uBarW, B.barWidth); gl.uniform1f(U.uTilt, B.tilt); gl.uniform1f(U.uShapeH, shapeH);
       gl.uniform1f(U.uRipple, B.ripple); gl.uniform1f(U.uRipPh, rpP); gl.uniform1f(U.uStag, stag*Math.min(1, Math.max(0, top/vh)));
