@@ -61,8 +61,6 @@
   .orbit-section{height:420vh;position:relative}
   .stage{position:sticky;top:0;height:100vh;overflow:hidden}
   .ring{position:absolute;inset:0;pointer-events:none;z-index:1}
-  .grid-head{position:absolute;left:50%;top:0;z-index:2;font-family:"JejuMyeongjo",serif;font-weight:400;font-size:32px;letter-spacing:-.03em;line-height:108%;
-    opacity:0;pointer-events:none;white-space:nowrap}
   /* case view */
   .case-bg{position:fixed;inset:0;background:var(--bg);opacity:0;z-index:300;pointer-events:none}
   .case-bg.open{pointer-events:auto}
@@ -153,8 +151,6 @@
   .caption .name,.caption .fig{display:inline-block;transition:opacity .22s var(--ease-out-expo),transform .22s var(--ease-out-expo),filter .22s var(--ease-out-expo)}
   .caption.out .name,.caption.out .fig{opacity:0;transform:translateY(-4px);filter:blur(2px);transition-duration:.12s;transition-timing-function:var(--ease-out-quad)}
   .caption.pre .name,.caption.pre .fig{opacity:0;transform:translateY(4px);filter:blur(2px);transition:none}
-  .progress{position:absolute;left:50%;top:22px;transform:translateX(-50%);z-index:200;width:120px;height:1px;background:color-mix(in srgb,var(--ink) 14%,transparent)}
-  .progress i{display:block;height:100%;width:100%;background:var(--ink);transform:scaleX(0);transform-origin:left center}
   .hint{position:absolute;left:16px;bottom:18px;z-index:200;font-family:"Geist Mono",monospace;font-size:12px;color:var(--mute);letter-spacing:.02em}
   .intro-mark{position:absolute;left:50%;top:50%;width:97.55px;overflow:visible;z-index:80;pointer-events:none;transform-origin:50% 50%;will-change:transform,opacity}
   .intro-mark path{fill:var(--ink);stroke:none}
@@ -264,7 +260,6 @@
     background:linear-gradient(transparent,#F58E3F 18%,#ED583E 34%,#F06F8A 50%,#8D5FB7 64%,#244EE7 82%,transparent);
     transform:translateY(-100%);animation:heroCue 2.2s cubic-bezier(.45,.05,.55,.95) 1s infinite}
   @keyframes heroCue{0%{transform:translateY(-85%)} 100%{transform:translateY(152%)}}
-  .paused .hero-cue .line i{animation-play-state:paused}
   @media (prefers-reduced-motion: reduce){ .hero-cue .line i{animation:none;transform:translateY(30%)} }
   @media (max-width:700px){ .hero-cue{display:none} }
   /* soft fade at the bottom edge while the work is on screen (a gradient, not a backdrop blur: no per-frame re-blur while scrolling) */
@@ -276,7 +271,6 @@
   .caption,.hint{padding:6px 10px}
   .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   .card:focus-visible{outline:2px solid var(--ink);outline-offset:6px}
-  .paused .scroll-cue i::after{animation-play-state:paused}
   /* theme toggle */
   /* top right; it waits for the hero text, then dissolves in (opacity + blur). It dissolves away while you scroll down and
      back in as soon as you scroll up; on desktop it stays away while the bottom bar (which has its own switch) is up */
@@ -308,7 +302,7 @@
   @media (hover:none){ .hint{display:none} }
   /* ---- phone list layout: no orbit — hero, a scroll cue, then the work with a bottom bar */
   .scroll-cue{display:none}
-  .m-list .ring,.m-list .caption,.m-list .hint,.m-list .progress{display:none}
+  .m-list .ring,.m-list .caption,.m-list .hint{display:none}
   /* phones: the hero is centred in the first screen, with the gradient line under "Get in touch" as the scroll hint;
      then the paragraph (moved out of the stage into .m-intro by JS) reads in as you scroll, then the line + "Scroll down for works" */
   .m-list .orbit-section{height:auto}
@@ -379,7 +373,6 @@
 <main id="main">
 <section class="orbit-section" id="orbit" aria-label="Introduction">
   <div class="stage" id="stage">
-    <div class="progress" hidden><i id="bar"></i></div>
     <svg class="intro-mark" id="introMark" viewBox="0 0 98 50" aria-hidden="true" focusable="false">
       <defs>
         <mask id="imRing" maskUnits="userSpaceOnUse" x="-4" y="-4" width="106" height="58">
@@ -666,7 +659,7 @@
 
   // ---------- DOM ----------
   const $ = id => document.getElementById(id);
-  const ring=$('ring'), centre=$('centre'), section=$('orbit'), bar=$('bar');
+  const ring=$('ring'), centre=$('centre'), section=$('orbit');
   const figEl=$('fig'), nameEl=$('cname'), introMark=$('introMark'), centreMark=centre.querySelector('.mark');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const stage = document.getElementById('stage'), caption = document.getElementById('caption');
@@ -705,7 +698,7 @@
   // you come back to the tab); while the tab is in the background it loops: write → hold → erase → pause → write…
   // Frames are rendered once (64px canvas → PNG data URLs, per OS colour) so each tick only swaps the link's href.
   // Background tabs pause requestAnimationFrame and slow page timers to ~1/s, so the loop is clocked by a tiny worker,
-  // whose timer keeps a steady beat. Safari ignores live favicons (keeps the static one); reduced motion and Pause skip it.
+  // whose timer keeps a steady beat. Safari ignores live favicons (keeps the static one); reduced motion skip it.
   (() => {
     const link = document.querySelector('link[rel="icon"]');
     const cv = document.createElement('canvas'), layer = document.createElement('canvas');
@@ -769,7 +762,7 @@
       worker.onmessage = () => { if (mode === 'loop'){ show(LOOP[pos]); pos = (pos + 1) % LOOP.length; } };
     } catch(e){ worker = null; }
     let fallback = 0;
-    const off = () => document.documentElement.classList.contains('paused') || reduce;
+    const off = () => reduce;
     function stop(){
       cancelAnimationFrame(raf); raf = 0;
       if (worker) worker.postMessage(0); clearInterval(fallback); fallback = 0;
@@ -804,11 +797,6 @@
     const cta = document.getElementById('cta'), cue = document.getElementById('heroCue');
     if (cta && cue && cta.offsetParent){ const cr = cta.getBoundingClientRect(), m = new DOMMatrix(getComputedStyle(cta).transform);
       cueTopPx = Math.round(cr.bottom - m.m42 - sr.top + 10); cue.style.top = cueTopPx + 'px'; cueDirty = true; }
-    // phones: the hero line runs from under "Get in touch" towards the bottom of the first screen, as long as there's room
-    if (cue && document.documentElement.classList.contains('m-list') && cueTopPx !== null){
-      const len = Math.min(110, Math.round(sr.height - cueTopPx - 36));
-      cue.style.height = Math.max(0, len) + 'px'; cue.style.visibility = len < 36 ? 'hidden' : '';
-    } else if (cue) cue.style.visibility = '';
   }
   addEventListener('resize', () => requestAnimationFrame(measureMark));
   document.fonts && document.fonts.ready.then(() => requestAnimationFrame(measureMark));
@@ -1005,7 +993,6 @@
     const words = v.Text.statement.trim().split(/\s+/).map(w => list ? w.charAt(0).toUpperCase() + w.slice(1) : w);
     // phones: the first sentence sits in the gradient as one span; the rest reads in through the wave
     const firstEnd = list ? words.findIndex(w => /[.!?]$/.test(w)) : -1;
-    statementGrad = firstEnd + 1;
     const wordsHtml = (firstEnd >= 0 ? `<span class="g">${words.slice(0, firstEnd + 1).join(' ')}</span> ` : '') +
       words.slice(firstEnd + 1).map(w => `<span>${[...w].map(ch => `<i>${ch}</i>`).join('')}</span>`).join(' ');
     document.getElementById('statementText').innerHTML = `<span class="st">${wordsHtml}</span>`;
@@ -1090,7 +1077,7 @@
   const getScrollY = () => lenis ? lenis.scroll : scrollY;
 
   // ---- sections
-  let txtClear = null, waveHead = 0, statementGrad = 0, statementWords = [], secs = { wkTop:0 }, cellRects = {}, nCells = 0, workCells = [];
+  let txtClear = null, waveHead = 0, statementWords = [], secs = { wkTop:0 }, workCells = [];
   function measureSections(){
     const wk = document.getElementById('works'), sy0 = scrollY;
     secs = { wkTop: wk.offsetTop };
@@ -1100,17 +1087,11 @@
       secs.scTop = sc.getBoundingClientRect().top + sy0; sc.style.transform = t2;
       const ct = document.getElementById('cta'), cr = ct.getBoundingClientRect(), cm = new DOMMatrix(getComputedStyle(ct).transform);
       secs.ctaBot = cr.bottom - cm.m42 + sy0; }
-    cellRects = {}; nCells = 0;
     workCells = [...document.querySelectorAll('.wcell')].filter(c => !c.hidden);
     const saved = workCells.map(cell => cell.style.transform);
     workCells.forEach(cell => { cell.style.transform = 'none'; });
     workCells.forEach(cell => { cell._docTop = cell.getBoundingClientRect().top + sy0; });
     workCells.forEach((cell, i) => { cell.style.transform = saved[i]; cell._c = {}; });
-    document.querySelectorAll('.wcell').forEach(cell => {
-      if (cell.hidden) return;
-      const r = cell.querySelector('.wimg').getBoundingClientRect();
-      cellRects[cell.dataset.id] = { left:r.left, w:r.width, h:r.height, docTop:r.top + sy0, idx:nCells++ };
-    });
   }
   document.fonts && document.fonts.ready.then(() => requestAnimationFrame(measureSections));
   addEventListener('resize', () => requestAnimationFrame(measureSections));
@@ -1170,7 +1151,7 @@
   const mTop = document.getElementById('mTop');
   const heroCue = document.getElementById('heroCue'), dock = document.getElementById('dock'), edgeBlur = document.getElementById('edgeBlur');
   const caseBg = document.getElementById('caseBg'), caseInfo = document.getElementById('caseInfo'), caseClose = document.getElementById('caseClose');
-  let lastFocus = null, paused = false, uiLastY = 0, uiHide = false;
+  let lastFocus = null, uiLastY = 0, uiHide = false;
   const scrollCueEl = document.querySelector('.scroll-cue');
   // while a piece is open, everything else is inert: focus stays in the view and screen readers only see it
   function setInertOutside(on, keep){
@@ -1454,7 +1435,7 @@
     // ---- scroll + ambient
     // ---- spin: auto-rotation (linear, constant) + drag/scroll momentum (exponential friction)
     if (!spinDir) spinDir = S.direction === 'clockwise' ? 1 : -1;
-    const holding = paused || cards.some(c => c.el._hover || c.el === document.activeElement);
+    const holding = cards.some(c => c.el._hover || c.el === document.activeElement);
     const cruise = (reduce || holding || !introDone || exId !== -1) ? 0 : S.autoSpeed * Math.PI/180 * spinDir;
     spinV = lerp(spinV, cruise, 1 - Math.pow(1 - S.ease, dt*60));      // frame-rate independent lerp back to cruise
     spin += spinV * dt;
@@ -1757,7 +1738,6 @@
     put(introMark, 'opacity', mOp.toFixed(3));
     put(centreMark, 'opacity', (glide >= 1 || reduce) ? '1' : '0');
 
-    bar.style.transform = `scaleX(${p.toFixed(4)})`;
 
     // ---- statement: words read in with scroll (opacity only); the opening sentence starts already read
     const y = getScrollY(), vh = innerHeight;
@@ -1839,7 +1819,7 @@
       stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'] };
     const FS = `
     precision highp float;
-    uniform vec2 uRes, uVP; uniform float uDpr, uTop, uThickPx, uWave, uWaves, uLobes, uFadeT, uFadeB, uGrain;
+    uniform vec2 uRes, uVP; uniform float uDpr, uTop, uThickPx, uWave, uWaves, uFadeT, uFadeB, uGrain;
     uniform float uPitch, uDot, uDensity, uDotA, uBarW, uTilt, uShapeH, uRipple, uRipPh, uFlRings, uFlPh, uWvPh;
     uniform vec3 uS0, uS1, uS2, uS3, uS4;
     float hash(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }   // no sin(): stays random on every GPU
@@ -1874,13 +1854,13 @@
     gl.useProgram(prog);
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    const U = {}; ['uRes','uVP','uDpr','uTop','uThickPx','uWave','uWaves','uLobes','uFadeT','uFadeB','uGrain','uPitch','uDot','uDensity','uDotA','uBarW','uTilt','uShapeH','uRipple','uRipPh','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
+    const U = {}; ['uRes','uVP','uDpr','uTop','uThickPx','uWave','uWaves','uFadeT','uFadeB','uGrain','uPitch','uDot','uDensity','uDotA','uBarW','uTilt','uShapeH','uRipple','uRipPh','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
       .forEach(n => U[n] = gl.getUniformLocation(prog, n));
     const rgb = h => { const n = parseInt(h.slice(1), 16); return [(n>>16&255)/255, (n>>8&255)/255, (n&255)/255]; };
     B.stops.forEach((h, i) => gl.uniform3fv(U['uS'+i], rgb(h)));
     // the fixed uniforms are set once
     const set1 = (n, x) => gl.uniform1f(U[n], x);
-    set1('uWave', B.wave); set1('uWaves', B.waves); set1('uLobes', B.lobes); set1('uGrain', B.grain);
+    set1('uWave', B.wave); set1('uWaves', B.waves); set1('uGrain', B.grain);
     set1('uPitch', B.pitch); set1('uDot', B.dotSize); set1('uDensity', B.density); set1('uDotA', B.dotOpacity);
     set1('uBarW', B.barWidth); set1('uTilt', B.tilt); set1('uRipple', B.ripple); set1('uFlRings', B.flowRings);
     gl.enable(gl.SCISSOR_TEST);
@@ -1951,7 +1931,6 @@
   function begin(){
     let seen = false; try{ seen = sessionStorage.getItem('orbitIntroSeen') === '1'; }catch(e){}
     introStart = (seen && V && V.Intro.oncePerSession) ? -1e9 : performance.now();
-    window.__is = introStart;
     const decodes = cards.filter(c=>c.img).map(c => c.img.decode().catch(()=>{}));
     Promise.race([Promise.all(decodes), new Promise(r => setTimeout(r, 4000))]).then(() => { imagesReady = true; });
   }

@@ -12,7 +12,7 @@
       stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'] };
     const FS = `
     precision highp float;
-    uniform vec2 uRes, uVP; uniform float uDpr, uTop, uThickPx, uWave, uWaves, uLobes, uFadeT, uFadeB, uGrain;
+    uniform vec2 uRes, uVP; uniform float uDpr, uTop, uThickPx, uWave, uWaves, uFadeT, uFadeB, uGrain;
     uniform float uPitch, uDot, uDensity, uDotA, uBarW, uTilt, uShapeH, uRipple, uRipPh, uFlRings, uFlPh, uWvPh;
     uniform vec3 uS0, uS1, uS2, uS3, uS4;
     float hash(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }   // no sin(): stays random on every GPU
@@ -47,13 +47,13 @@
     gl.useProgram(prog);
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    const U = {}; ['uRes','uVP','uDpr','uTop','uThickPx','uWave','uWaves','uLobes','uFadeT','uFadeB','uGrain','uPitch','uDot','uDensity','uDotA','uBarW','uTilt','uShapeH','uRipple','uRipPh','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
+    const U = {}; ['uRes','uVP','uDpr','uTop','uThickPx','uWave','uWaves','uFadeT','uFadeB','uGrain','uPitch','uDot','uDensity','uDotA','uBarW','uTilt','uShapeH','uRipple','uRipPh','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
       .forEach(n => U[n] = gl.getUniformLocation(prog, n));
     const rgb = h => { const n = parseInt(h.slice(1), 16); return [(n>>16&255)/255, (n>>8&255)/255, (n&255)/255]; };
     B.stops.forEach((h, i) => gl.uniform3fv(U['uS'+i], rgb(h)));
     // the fixed uniforms are set once
     const set1 = (n, x) => gl.uniform1f(U[n], x);
-    set1('uWave', B.wave); set1('uWaves', B.waves); set1('uLobes', B.lobes); set1('uGrain', B.grain);
+    set1('uWave', B.wave); set1('uWaves', B.waves); set1('uGrain', B.grain);
     set1('uPitch', B.pitch); set1('uDot', B.dotSize); set1('uDensity', B.density); set1('uDotA', B.dotOpacity);
     set1('uBarW', B.barWidth); set1('uTilt', B.tilt); set1('uRipple', B.ripple); set1('uFlRings', B.flowRings);
     gl.enable(gl.SCISSOR_TEST);

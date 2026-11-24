@@ -2,7 +2,7 @@
   // you come back to the tab); while the tab is in the background it loops: write → hold → erase → pause → write…
   // Frames are rendered once (64px canvas → PNG data URLs, per OS colour) so each tick only swaps the link's href.
   // Background tabs pause requestAnimationFrame and slow page timers to ~1/s, so the loop is clocked by a tiny worker,
-  // whose timer keeps a steady beat. Safari ignores live favicons (keeps the static one); reduced motion and Pause skip it.
+  // whose timer keeps a steady beat. Safari ignores live favicons (keeps the static one); reduced motion skip it.
   (() => {
     const link = document.querySelector('link[rel="icon"]');
     const cv = document.createElement('canvas'), layer = document.createElement('canvas');
@@ -66,7 +66,7 @@
       worker.onmessage = () => { if (mode === 'loop'){ show(LOOP[pos]); pos = (pos + 1) % LOOP.length; } };
     } catch(e){ worker = null; }
     let fallback = 0;
-    const off = () => document.documentElement.classList.contains('paused') || reduce;
+    const off = () => reduce;
     function stop(){
       cancelAnimationFrame(raf); raf = 0;
       if (worker) worker.postMessage(0); clearInterval(fallback); fallback = 0;

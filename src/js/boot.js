@@ -9,7 +9,6 @@
   function begin(){
     let seen = false; try{ seen = sessionStorage.getItem('orbitIntroSeen') === '1'; }catch(e){}
     introStart = (seen && V && V.Intro.oncePerSession) ? -1e9 : performance.now();
-    window.__is = introStart;
     const decodes = cards.filter(c=>c.img).map(c => c.img.decode().catch(()=>{}));
     Promise.race([Promise.all(decodes), new Promise(r => setTimeout(r, 4000))]).then(() => { imagesReady = true; });
   }

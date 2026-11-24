@@ -1,5 +1,5 @@
   // ---- sections
-  let txtClear = null, waveHead = 0, statementGrad = 0, statementWords = [], secs = { wkTop:0 }, cellRects = {}, nCells = 0, workCells = [];
+  let txtClear = null, waveHead = 0, statementWords = [], secs = { wkTop:0 }, workCells = [];
   function measureSections(){
     const wk = document.getElementById('works'), sy0 = scrollY;
     secs = { wkTop: wk.offsetTop };
@@ -9,17 +9,11 @@
       secs.scTop = sc.getBoundingClientRect().top + sy0; sc.style.transform = t2;
       const ct = document.getElementById('cta'), cr = ct.getBoundingClientRect(), cm = new DOMMatrix(getComputedStyle(ct).transform);
       secs.ctaBot = cr.bottom - cm.m42 + sy0; }
-    cellRects = {}; nCells = 0;
     workCells = [...document.querySelectorAll('.wcell')].filter(c => !c.hidden);
     const saved = workCells.map(cell => cell.style.transform);
     workCells.forEach(cell => { cell.style.transform = 'none'; });
     workCells.forEach(cell => { cell._docTop = cell.getBoundingClientRect().top + sy0; });
     workCells.forEach((cell, i) => { cell.style.transform = saved[i]; cell._c = {}; });
-    document.querySelectorAll('.wcell').forEach(cell => {
-      if (cell.hidden) return;
-      const r = cell.querySelector('.wimg').getBoundingClientRect();
-      cellRects[cell.dataset.id] = { left:r.left, w:r.width, h:r.height, docTop:r.top + sy0, idx:nCells++ };
-    });
   }
   document.fonts && document.fonts.ready.then(() => requestAnimationFrame(measureSections));
   addEventListener('resize', () => requestAnimationFrame(measureSections));

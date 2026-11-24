@@ -79,7 +79,6 @@
     const words = v.Text.statement.trim().split(/\s+/).map(w => list ? w.charAt(0).toUpperCase() + w.slice(1) : w);
     // phones: the first sentence sits in the gradient as one span; the rest reads in through the wave
     const firstEnd = list ? words.findIndex(w => /[.!?]$/.test(w)) : -1;
-    statementGrad = firstEnd + 1;
     const wordsHtml = (firstEnd >= 0 ? `<span class="g">${words.slice(0, firstEnd + 1).join(' ')}</span> ` : '') +
       words.slice(firstEnd + 1).map(w => `<span>${[...w].map(ch => `<i>${ch}</i>`).join('')}</span>`).join(' ');
     document.getElementById('statementText').innerHTML = `<span class="st">${wordsHtml}</span>`;

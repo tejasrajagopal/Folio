@@ -11,7 +11,7 @@
   const mTop = document.getElementById('mTop');
   const heroCue = document.getElementById('heroCue'), dock = document.getElementById('dock'), edgeBlur = document.getElementById('edgeBlur');
   const caseBg = document.getElementById('caseBg'), caseInfo = document.getElementById('caseInfo'), caseClose = document.getElementById('caseClose');
-  let lastFocus = null, paused = false, uiLastY = 0, uiHide = false;
+  let lastFocus = null, uiLastY = 0, uiHide = false;
   const scrollCueEl = document.querySelector('.scroll-cue');
   // while a piece is open, everything else is inert: focus stays in the view and screen readers only see it
   function setInertOutside(on, keep){

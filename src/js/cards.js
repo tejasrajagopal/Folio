@@ -10,11 +10,6 @@
     const cta = document.getElementById('cta'), cue = document.getElementById('heroCue');
     if (cta && cue && cta.offsetParent){ const cr = cta.getBoundingClientRect(), m = new DOMMatrix(getComputedStyle(cta).transform);
       cueTopPx = Math.round(cr.bottom - m.m42 - sr.top + 10); cue.style.top = cueTopPx + 'px'; cueDirty = true; }
-    // phones: the hero line runs from under "Get in touch" towards the bottom of the first screen, as long as there's room
-    if (cue && document.documentElement.classList.contains('m-list') && cueTopPx !== null){
-      const len = Math.min(110, Math.round(sr.height - cueTopPx - 36));
-      cue.style.height = Math.max(0, len) + 'px'; cue.style.visibility = len < 36 ? 'hidden' : '';
-    } else if (cue) cue.style.visibility = '';
   }
   addEventListener('resize', () => requestAnimationFrame(measureMark));
   document.fonts && document.fonts.ready.then(() => requestAnimationFrame(measureMark));

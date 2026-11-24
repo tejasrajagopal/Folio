@@ -35,7 +35,7 @@
     // ---- scroll + ambient
     // ---- spin: auto-rotation (linear, constant) + drag/scroll momentum (exponential friction)
     if (!spinDir) spinDir = S.direction === 'clockwise' ? 1 : -1;
-    const holding = paused || cards.some(c => c.el._hover || c.el === document.activeElement);
+    const holding = cards.some(c => c.el._hover || c.el === document.activeElement);
     const cruise = (reduce || holding || !introDone || exId !== -1) ? 0 : S.autoSpeed * Math.PI/180 * spinDir;
     spinV = lerp(spinV, cruise, 1 - Math.pow(1 - S.ease, dt*60));      // frame-rate independent lerp back to cruise
     spin += spinV * dt;
@@ -338,7 +338,6 @@
     put(introMark, 'opacity', mOp.toFixed(3));
     put(centreMark, 'opacity', (glide >= 1 || reduce) ? '1' : '0');
 
-    bar.style.transform = `scaleX(${p.toFixed(4)})`;
 
     // ---- statement: words read in with scroll (opacity only); the opening sentence starts already read
     const y = getScrollY(), vh = innerHeight;

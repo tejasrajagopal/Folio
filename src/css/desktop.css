@@ -34,7 +34,6 @@
     background:linear-gradient(transparent,#F58E3F 18%,#ED583E 34%,#F06F8A 50%,#8D5FB7 64%,#244EE7 82%,transparent);
     transform:translateY(-100%);animation:heroCue 2.2s cubic-bezier(.45,.05,.55,.95) 1s infinite}
   @keyframes heroCue{0%{transform:translateY(-85%)} 100%{transform:translateY(152%)}}
-  .paused .hero-cue .line i{animation-play-state:paused}
   @media (prefers-reduced-motion: reduce){ .hero-cue .line i{animation:none;transform:translateY(30%)} }
   @media (max-width:700px){ .hero-cue{display:none} }
   /* soft fade at the bottom edge while the work is on screen (a gradient, not a backdrop blur: no per-frame re-blur while scrolling) */
@@ -46,7 +45,6 @@
   .caption,.hint{padding:6px 10px}
   .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   .card:focus-visible{outline:2px solid var(--ink);outline-offset:6px}
-  .paused .scroll-cue i::after{animation-play-state:paused}
   /* theme toggle */
   /* top right; it waits for the hero text, then dissolves in (opacity + blur). It dissolves away while you scroll down and
      back in as soon as you scroll up; on desktop it stays away while the bottom bar (which has its own switch) is up */

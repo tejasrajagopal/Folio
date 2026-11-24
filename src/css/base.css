@@ -20,8 +20,6 @@
   .orbit-section{height:420vh;position:relative}
   .stage{position:sticky;top:0;height:100vh;overflow:hidden}
   .ring{position:absolute;inset:0;pointer-events:none;z-index:1}
-  .grid-head{position:absolute;left:50%;top:0;z-index:2;font-family:"JejuMyeongjo",serif;font-weight:400;font-size:32px;letter-spacing:-.03em;line-height:108%;
-    opacity:0;pointer-events:none;white-space:nowrap}
   /* case view */
   .case-bg{position:fixed;inset:0;background:var(--bg);opacity:0;z-index:300;pointer-events:none}
   .case-bg.open{pointer-events:auto}
@@ -112,8 +110,6 @@
   .caption .name,.caption .fig{display:inline-block;transition:opacity .22s var(--ease-out-expo),transform .22s var(--ease-out-expo),filter .22s var(--ease-out-expo)}
   .caption.out .name,.caption.out .fig{opacity:0;transform:translateY(-4px);filter:blur(2px);transition-duration:.12s;transition-timing-function:var(--ease-out-quad)}
   .caption.pre .name,.caption.pre .fig{opacity:0;transform:translateY(4px);filter:blur(2px);transition:none}
-  .progress{position:absolute;left:50%;top:22px;transform:translateX(-50%);z-index:200;width:120px;height:1px;background:color-mix(in srgb,var(--ink) 14%,transparent)}
-  .progress i{display:block;height:100%;width:100%;background:var(--ink);transform:scaleX(0);transform-origin:left center}
   .hint{position:absolute;left:16px;bottom:18px;z-index:200;font-family:"Geist Mono",monospace;font-size:12px;color:var(--mute);letter-spacing:.02em}
   .intro-mark{position:absolute;left:50%;top:50%;width:97.55px;overflow:visible;z-index:80;pointer-events:none;transform-origin:50% 50%;will-change:transform,opacity}
   .intro-mark path{fill:var(--ink);stroke:none}

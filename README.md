@@ -44,3 +44,23 @@ The site is plain static files, so it can be hosted on GitHub Pages, Vercel, Net
 ## SEO
 
 The head carries the description, canonical URL (`https://tejasrajagopal.com/`), Open Graph and Twitter tags, and a JSON-LD graph (WebSite, ProfilePage, Person, and the work as an ItemList). The subtitle, statement and work grid are also written into the initial HTML, so crawlers that don't run JavaScript still see them; the script then rebuilds them as before. If you change the name, subtitle, statement or works in `cfg`/`WORKS`, update the matching head tags, JSON-LD, initial HTML and `llms.txt` too.
+
+## Working on the site
+
+`index.html` is **built**: don't edit it by hand. The source is in `src/`:
+
+- `src/index.html` — the page; lines like `@@include css/base.css@@` pull in the files below
+- `src/css/` — `base.css` (shared), `desktop.css`, `phone.css`
+- `src/js/` — `config` (settings), `state`, `favicon`, `cards`, `theme`, `apply`, `input`, `sections`, `case-view`,
+  `orbit-gl` (the WebGL orbit), `frame` (the per-frame loop), `band` (the gradient band), `boot`.
+  They are joined into one script in that order and share one scope.
+
+After any change:
+
+```
+node build.mjs          # rebuild index.html from src/
+node tests/smoke.cjs    # load it at desktop + phone sizes and check it (needs Playwright with Chromium)
+```
+
+The smoke test fails if `index.html` is out of date with `src/`, on any page error, on sideways scrolling, and on the
+band, bars, filters, images and theme switch misbehaving.

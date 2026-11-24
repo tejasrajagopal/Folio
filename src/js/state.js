@@ -29,7 +29,7 @@
 
   // ---------- DOM ----------
   const $ = id => document.getElementById(id);
-  const ring=$('ring'), centre=$('centre'), section=$('orbit'), bar=$('bar');
+  const ring=$('ring'), centre=$('centre'), section=$('orbit');
   const figEl=$('fig'), nameEl=$('cname'), introMark=$('introMark'), centreMark=centre.querySelector('.mark');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const stage = document.getElementById('stage'), caption = document.getElementById('caption');

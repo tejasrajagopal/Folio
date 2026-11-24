@@ -14,7 +14,7 @@
   @media (hover:none){ .hint{display:none} }
   /* ---- phone list layout: no orbit — hero, a scroll cue, then the work with a bottom bar */
   .scroll-cue{display:none}
-  .m-list .ring,.m-list .caption,.m-list .hint,.m-list .progress{display:none}
+  .m-list .ring,.m-list .caption,.m-list .hint{display:none}
   /* phones: the hero is centred in the first screen, with the gradient line under "Get in touch" as the scroll hint;
      then the paragraph (moved out of the stage into .m-intro by JS) reads in as you scroll, then the line + "Scroll down for works" */
   .m-list .orbit-section{height:auto}
