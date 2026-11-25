@@ -1816,10 +1816,16 @@
     const B = { thickness:.78, wave:.055, waves:1, lobes:.015, fadeTop:.32, fadeBottom:.22, blur:120, grain:.43,   // blur + grain: the Figma layer blur (120) and mono noise (white, 43%)
       pitch:6, dotSize:1.6, density:.62, dotOpacity:.85, barWidth:33, tilt:8, shapeHeight:.28,
       ripple:.025, rippleSpeed:.5, rippleScroll:1.5, flowRings:1.4, flowSpeed:.12, flowScroll:1, travelScroll:.5, settle:.6,
-      stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'] };
+      stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'],
+      // how it moves. 1 Flow: colour layers drift through the band (the original). 2 Rise: bars grow up from the middle outward
+      // and the outline morphs flat → curve → peak as it crosses the screen. 3 Pulse: rings of colour breathe out from a hot core.
+      // 4 Swipe: the colours sweep across in a diagonal staircase. 5 Halftone: the band dissolves into growing dots at its edges
+      // instead of a blur. 6 Stretch: thin and calm at rest, it swells and brightens with the speed of your scroll.
+      mode: 1 };
     const FS = `
     precision highp float;
     uniform vec2 uRes, uVP; uniform float uDpr, uTop, uThickPx, uWave, uWaves, uFadeT, uFadeB, uGrain;
+    uniform float uMode, uProg, uVel;
     uniform float uPitch, uDot, uDensity, uDotA, uBarW, uTilt, uShapeH, uRipple, uRipPh, uFlRings, uFlPh, uWvPh;
     uniform vec3 uS0, uS1, uS2, uS3, uS4;
     float hash(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }   // no sin(): stays random on every GPU
@@ -1829,20 +1835,44 @@
       if (t < 0.6281) return mix(uS2, uS3, (t-0.5147)/0.1134);
       return mix(uS3, uS4, clamp((t-0.6281)/0.3719, 0.0, 1.0));
     }
+    #define IS(n) (uMode > n - 0.5 && uMode < n + 0.5)
+    float edgeA(float v){ return smoothstep(0.0, uFadeT, v) * (1.0 - smoothstep(1.0 - uFadeB, 1.0, v)); }
     void main(){
       vec2 px = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) / uDpr;      // CSS px inside the canvas
       float bi = floor(px.x / uBarW), cx = (bi + 0.5)*uBarW, xr = px.x - cx, u = cx / uVP.x - 0.5, sc = min(uVP.y, uVP.x);
-      float bend = uShapeH*sc*(1.0 - cos(3.14159265*clamp(u*2.0, -1.0, 1.0)))*0.5 + uWave*0.25*uVP.x*cos(6.2831853*uWaves*(u - uWvPh));
+      float au = clamp(abs(u)*2.0, 0.0, 1.0), curve = (1.0 - cos(3.14159265*au))*0.5, prof = curve;
+      // 2 Rise: the outline morphs flat → curve → straight-sided peak as the band crosses the screen
+      if (IS(2.0)) prof = mix(mix(0.0, curve, smoothstep(0.08, 0.42, uProg)), au, smoothstep(0.55, 0.9, uProg));
+      float bend = uShapeH*sc*prof + uWave*0.25*uVP.x*cos(6.2831853*uWaves*(u - uWvPh));
       bend += uRipple*uVP.y*sin(bi*0.55 - uRipPh) + xr*tan(uTilt*0.0174533);
-      float v = (px.y - uTop - bend) / uThickPx;
-      float a = smoothstep(0.0, uFadeT, v) * (1.0 - smoothstep(1.0 - uFadeB, 1.0, v));
-      if (a <= 0.0){ gl_FragColor = vec4(0.0); return; }
-      float t = (v - uFadeT*0.35) / (1.0 - uFadeT*0.35 - uFadeB*0.35);
-      float x = t*uFlRings - uFlPh; t = clamp(1.0 - abs(fract(x*0.5)*2.0 - 1.0), 0.0, 1.0);
+      float v = (px.y - uTop - bend) / uThickPx, k = 1.0;
+      // 2 Rise: each bar grows up from its foot, the middle first and the sides after
+      if (IS(2.0)){ float h = clamp(uProg*3.2 - au*1.25, 0.0, 1.0); h = 1.0 - pow(1.0 - h, 3.0); k = max(h, 0.001); }
+      // 6 Stretch: thin at rest, full height at speed
+      if (IS(6.0)) k = mix(0.5, 1.0, uVel);
+      if (IS(2.0)) v = 1.0 - (1.0 - v)/k; else if (IS(6.0)) v = (v - 0.5)/k + 0.5;
+      float a = edgeA(v);
+      if (a <= 0.0 && !IS(5.0)){ gl_FragColor = vec4(0.0); return; }
+      float t = (v - uFadeT*0.35) / (1.0 - uFadeT*0.35 - uFadeB*0.35), x = t*uFlRings - uFlPh;
+      // 3 Pulse: rings breathe outward from a hot core low in the middle of the band
+      if (IS(3.0)){ vec2 q = vec2(u*uVP.x/uThickPx*0.85, (v - 0.68)*1.5); x = length(q)*uFlRings*1.5 - uFlPh*1.6; }
+      // 4 Swipe: the layers lean, so the flow reads as colour sweeping across in steps
+      if (IS(4.0)) x = (t + u*1.7)*uFlRings - uFlPh*1.8;
+      t = clamp(1.0 - abs(fract(x*0.5)*2.0 - 1.0), 0.0, 1.0);
       vec3 c = ramp(t);
+      if (IS(6.0)) c = mix(c, vec3(1.0), 0.22*(1.0 - uVel));                         // calmer, paler at rest
       c = mix(c, vec3(1.0), uGrain * step(0.5, hash(gl_FragCoord.xy + 17.0)));     // the Figma noise: fine white grain at 43%
+      if (IS(5.0)){
+        // 5 Halftone: no blur at the edges; the band breaks into dots that grow until they merge into solid colour
+        float hp = 9.0; vec2 hc = (floor(px / hp) + 0.5)*hp;
+        float ac = edgeA((hc.y - uTop - (bend + (hc.x - px.x)*tan(uTilt*0.0174533))) / uThickPx);   // judged at the dot's centre, so every dot is round
+        float cov = clamp((sqrt(ac)*hp*0.80 - length(px - hc))*uDpr + 0.5, 0.0, 1.0);
+        c += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
+        gl_FragColor = vec4(c*cov, cov); return;
+      }
       vec2 g = vec2(px.x, px.y - uTop), cell = floor(g / uPitch), f = g - cell*uPitch; cell = mod(cell, 4096.0);
       float r = 0.575*uDot*(0.45 + 1.25*t), d = length(f - 0.5*uPitch);            // round dots that swell with the colour
+      if (IS(6.0)) r *= 0.7 + 0.9*uVel;
       c = mix(c, vec3(1.0), step(hash(cell), uDensity) * clamp((r - d)*uDpr + 0.5, 0.0, 1.0) * uDotA * smoothstep(0.04, 0.35, a));
       c += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
       gl_FragColor = vec4(c*a, a);
@@ -1854,7 +1884,7 @@
     gl.useProgram(prog);
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    const U = {}; ['uRes','uVP','uDpr','uTop','uThickPx','uWave','uWaves','uFadeT','uFadeB','uGrain','uPitch','uDot','uDensity','uDotA','uBarW','uTilt','uShapeH','uRipple','uRipPh','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
+    const U = {}; ['uRes','uVP','uMode','uProg','uVel','uDpr','uTop','uThickPx','uWave','uWaves','uFadeT','uFadeB','uGrain','uPitch','uDot','uDensity','uDotA','uBarW','uTilt','uShapeH','uRipple','uRipPh','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
       .forEach(n => U[n] = gl.getUniformLocation(prog, n));
     const rgb = h => { const n = parseInt(h.slice(1), 16); return [(n>>16&255)/255, (n>>8&255)/255, (n&255)/255]; };
     B.stops.forEach((h, i) => gl.uniform3fv(U['uS'+i], rgb(h)));
@@ -1893,6 +1923,7 @@
       return (L = { boxTop, boxH, dpr, H, list });
     }
 
+    let vel = 0;
     let shown = false, prevY = 0, lastT = 0, lastDraw = 0, flT = 0, flP = 0, rpT = 0, rpP = 0, wvT = 0, wvP = 0;
     function tick(now){
       requestAnimationFrame(tick);
@@ -1903,13 +1934,19 @@
       // on screen at all? (phones also wait for the hero to come in)
       const on = (!P.list || centre.classList.contains('in')) && P.boxTop < y + vh && P.boxTop + P.boxH > y;
       if (on !== shown){ shown = on; cv.style.visibility = on ? 'visible' : 'hidden'; }
-      if (!on){ flP = flT; rpP = rpT; wvP = wvT; return; }
+      if (!on){ flP = flT; rpP = rpT; wvP = wvT; vel = 0; return; }
+      // scroll speed, smoothed (0 at rest → 1 at a brisk scroll); only mode 6 reads it
+      const sp = dt > 0 ? Math.min(1, Math.abs(dy)*vh / dt / 2200) : 0;
+      vel += (sp - vel) * (1 - Math.exp(-dt / (sp > vel ? 0.12 : 0.45)));
       if (!reduce){ flT += dy*B.flowScroll*0.6 + dt*B.flowSpeed; rpT += dy*B.rippleScroll*4 + dt*B.rippleSpeed*2; wvT += dy*B.travelScroll*0.5; }
       const k = 1 - Math.exp(-dt / B.settle);
       flP += (flT - flP)*k; rpP += (rpT - rpP)*k; wvP += (wvT - wvP)*k;
       if (now - lastDraw < 33 && lastDraw) return;                    // the flow is slow: 30 redraws a second is plenty
       lastDraw = now;
       set1('uRipPh', rpP); set1('uFlPh', flP); set1('uWvPh', wvP);
+      const pv = window.FOLIO_BAND;                                   // the local preview's picker can override the mode
+      set1('uMode', (pv && pv.mode) || B.mode); set1('uVel', reduce ? 1 : vel);
+      set1('uProg', reduce ? 1 : Math.min(1, Math.max(0, (y + vh - P.boxTop) / (vh + P.boxH))));
       // only the rows that are on screen (plus a margin for scrolling between redraws)
       const m = vh*0.4, r0 = Math.max(0, y - m - P.boxTop), r1 = Math.min(P.boxH, y + vh + m - P.boxTop);
       const y0 = Math.max(0, Math.floor((P.boxH - r1)*P.dpr)), h = Math.min(P.H - y0, Math.ceil((r1 - r0)*P.dpr) + 2);
