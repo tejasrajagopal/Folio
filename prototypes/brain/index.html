@@ -10,16 +10,125 @@
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;background:#000;overflow:hidden}
-  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
-  .no-gl{position:fixed;inset:0;display:none;place-items:center;color:rgba(255,255,255,.6);font:300 13px/1.5 ui-monospace,Menlo,monospace;text-align:center;padding:24px}
-  .no-gl.on{display:grid}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;opacity:0;transition:opacity 1.2s ease}
+  canvas.on{opacity:1}
+  canvas:active{cursor:grabbing}
+  @media (prefers-reduced-motion: reduce){canvas{transition:none}}
+  .note{position:fixed;inset:0;display:none;place-items:center;color:rgba(255,255,255,.6);font:300 13px/1.5 ui-monospace,Menlo,monospace;text-align:center;padding:24px}
+  .note.on{display:grid}
+  .credit{position:fixed;left:0;right:0;bottom:max(14px,env(safe-area-inset-bottom));text-align:center;font:300 11px/1.4 ui-monospace,Menlo,monospace;letter-spacing:.02em;color:rgba(255,255,255,.32);pointer-events:none}
+  .credit a{color:inherit;pointer-events:auto}
 </style>
 </head>
 <body>
-<canvas id="cv" aria-label="A glowing amber brain floating inside a round glass jar"></canvas>
-<p class="no-gl" id="nogl">This piece needs WebGL 2, which this browser doesn't offer.</p>
+<canvas id="cv" aria-label="A glowing amber brain floating inside a round glass jar. Drag to turn it; double click to reset."></canvas>
+<p class="note" id="note">This piece needs WebGL 2, which this browser doesn't offer.</p>
+<p class="credit">Brain model: <a href="https://sketchfab.com/3d-models/human-brain-7a27c17fd6c0488bb31ab093236a47fb" rel="noopener">Human Brain</a> by 3DRT STUDIOS, <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>, reshaded in amber</p>
 
-<script id="fs" type="x-shader/x-fragment">#version 300 es
+<!-- shared: the dark studio that the glass and the wet surface of the brain both mirror -->
+<script id="studio" type="x-shader/x-fragment">
+uniform mat3 uEnvRot;     // keeps the lights with the camera as the jar is turned
+vec3 studio(vec3 r){
+  r = uEnvRot*r;
+  float a  = abs(atan(r.x, -r.z));              // 0 = straight behind the jar
+  float el = asin(clamp(r.y, -1., 1.));
+  float side = r.x < 0. ? 1. : .8;
+  // two tall strip lights beside and a little behind the jar
+  float strip = smoothstep(.21, .08, abs(a - 1.30))*smoothstep(1.12, .45, abs(el));
+  float thin  = smoothstep(.05, .015, abs(a - .78))*smoothstep(.9, .3, abs(el));
+  float back  = smoothstep(.75, 0., a)*(.5 + .5*smoothstep(-.6, .5, r.y));
+  float top   = smoothstep(.55, .98, r.y);
+  return vec3(.93, .96, 1.)*(strip*15.*side + thin*2. + back*.24 + top*2.2 + .01);
+}
+</script>
+
+<script id="brain-vs" type="x-shader/x-vertex">#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNor;
+layout(location=2) in vec2 aUV;
+layout(location=3) in vec3 aTan;
+uniform mat3 uBrain;      // brain -> world
+uniform vec3 uBrainPos, uCamPos;
+uniform mat3 uCamInv;
+uniform vec2 uProj;
+out vec3 vL, vW, vN, vT;
+out vec2 vUV;
+const vec3 SC = vec3(1.14, .985, .96);
+void main(){
+  vec3 w = uBrain*(aPos*SC) + uBrainPos;
+  vL = aPos; vW = w; vUV = aUV;
+  vN = uBrain*(aNor/SC); vT = uBrain*(aTan*SC);
+  vec3 pc = uCamInv*(w - uCamPos);
+  float d = -pc.z;
+  gl_Position = vec4(pc.xy*uProj, (d - 9.)/1.6*d, d);
+}
+</script>
+
+<script id="brain-fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uTissue, uNormals;
+uniform mat3 uBrain;
+uniform vec3 uBrainPos, uCamPos;
+uniform float uPulse, uTime, uScale;
+in vec3 vL, vW, vN, vT;
+in vec2 vUV;
+out vec4 outColor;
+//STUDIO
+
+// colours are linear light: the tone curve at the end turns strong orange into yellow, then white
+const vec3 AMBER = vec3(1., .165, .002);
+const vec3 DEEP  = vec3(.075, .006, .0);
+const vec3 HOT   = vec3(1., .295, .013);
+
+void main(){
+  vec3 ng = normalize(vN), t = normalize(vT - ng*dot(ng, vT));
+  vec3 bump = texture(uNormals, vUV).xyz*2. - 1.;
+  bump.xy *= 1.25;
+  vec3 n = normalize(t*bump.x - cross(ng, t)*bump.y + ng*bump.z);
+  vec3 v = normalize(uCamPos - vW);
+  if (dot(ng, v) < 0.){ ng = -ng; n = -n; }
+  float ndv = clamp(dot(n, v), 0., 1.), gdv = clamp(dot(ng, v), 0., 1.);
+
+  // the painted tissue map is pale on the crowns and dark red down in the grooves
+  vec3 skin = texture(uTissue, vUV).rgb;
+  float lum = dot(skin, vec3(.3, .5, .2));
+  float crown = smoothstep(.27, .62, lum);
+  float vein = smoothstep(.5, .25, skin.g/max(skin.r, .01));     // fine red vessels
+
+  // a light burns in the middle: what reaches the eye depends on how near the line of sight passes it
+  vec3 heartW = uBrainPos + uBrain*vec3(0., -.10, -.02);
+  vec3 toH = heartW - vW;
+  vec3 perp = toH + v*dot(toH, -v);
+  float core = exp(-dot(perp, perp)/.125)*uPulse;
+  // slow waves of light travelling outward through the folds
+  float wave = .5 + .5*sin(9.*length(vL - vec3(0., -.1, 0.)) + 2.5*lum - uTime*.9);
+  core *= .84 + .26*wave;
+
+  // the amber body, lit softly from the front; grooves fall away to a deep red-brown
+  vec3 c = mix(DEEP, AMBER*.62, crown)*(.05 + .95*ndv*ndv);
+  c *= 1. - .5*vein;
+  // light from within: crowns near the heart burn yellow, the grooves between them stay orange
+  c += mix(vec3(1., .11, .001)*.75, HOT*4.4, crown*crown*crown)*pow(core, 1.4)*(.45 + .55*ndv);
+  // the split between the halves is a seam of light
+  float seam = smoothstep(.05, .0, abs(vL.x))*smoothstep(-.1, .25, vL.z);
+  c += HOT*2.6*seam*(.25 + core);
+  // thin edges let light through
+  c += vec3(1., .13, .0)*pow(1. - gdv, 2.6)*(.35 + .9*core);
+
+  // a wet, glassy skin: it mirrors the studio and carries tight highlights
+  float F = .045 + .955*pow(1. - ndv, 5.);
+  c += studio(reflect(-v, n))*F*(.25 + .75*crown)*vec3(1., .62, .26)*.9;
+  vec3 l1 = normalize(vec3(-.35, .55, .76)), l2 = normalize(vec3(.5, -.2, .84)), l3 = normalize(vec3(.1, .9, .42));
+  float s = pow(max(dot(n, normalize(l1 + v)), 0.), 120.)*2.6
+          + pow(max(dot(n, normalize(l2 + v)), 0.), 60.)*.7
+          + pow(max(dot(n, normalize(l3 + v)), 0.), 90.)*1.2;
+  c += vec3(1., .80, .50)*s*(.2 + .8*crown);
+
+  outColor = vec4(c*uScale, 1.);
+}
+</script>
+
+<script id="scene-fs" type="x-shader/x-fragment">#version 300 es
 precision highp float;
 precision highp sampler2D;
 
@@ -28,72 +137,17 @@ uniform float uTime;
 uniform float uView;      // world units across the screen height
 uniform vec3  uCamPos;
 uniform mat3  uCam;       // camera basis (columns: right, up, back)
-uniform mat3  uBrainRot;  // world -> brain
 uniform vec3  uBrainPos;
-uniform float uPulse;
-uniform sampler2D uFold;
+uniform float uPulse, uScale;
+uniform sampler2D uSpecimen;   // the brain, already drawn, with its blurred copies in the mip chain
 out vec4 outColor;
+//STUDIO
 
 const float CAM_D = 9.0;
-const vec3  BR  = vec3(.535, .60, .38);   // brain half-size: across, front-to-back, top-to-bottom
-const float AMP = .042;                    // how deep the grooves cut
+const vec3 AMBER = vec3(1., .165, .002);
 
 float smin(float a, float b, float k){ float h = clamp(.5 + .5*(b - a)/k, 0., 1.); return mix(b, a, h) - k*h*(1. - h); }
-float smax(float a, float b, float k){ return -smin(-a, -b, k); }
 
-/* ---------- brain ---------- */
-// the brain is seen from above: +y is the front, +z the crown, facing the camera
-vec3 egg(vec3 p){ p.x /= 1. - .11*p.y/BR.y; return p; }
-float sdEll(vec3 p){ float k0 = length(p/BR), k1 = length(p/(BR*BR)); return k0*(k0 - 1.)/k1; }
-float foldH(vec3 p){
-  vec3 d = normalize(p/BR);
-  vec2 uv = d.xy*sqrt(2./(1. + max(d.z, -.7)));       // equal-area map of the upper dome
-  return textureLod(uFold, uv*.40 + vec2(.47, .21), 0.).r;
-}
-float sdBrain(vec3 p, out float h){
-  p = egg(p);
-  h = foldH(p);
-  float d = sdEll(p) + AMP*(1. - h);
-  // the split between the two halves, a touch wider at the front and back
-  float gap = .010 + .05*smoothstep(.75, 1.05, abs(p.y)/BR.y);
-  return smax(d, gap - abs(p.x), .045);
-}
-float sdBrain(vec3 p){ float h; return sdBrain(p, h); }
-vec3 brainNormal(vec3 p){
-  const vec2 e = vec2(1., -1.)*.0022;
-  return normalize(e.xyy*sdBrain(p + e.xyy) + e.yyx*sdBrain(p + e.yyx) + e.yxy*sdBrain(p + e.yxy) + e.xxx*sdBrain(p + e.xxx));
-}
-
-// colours are linear light: the tone curve at the end turns strong orange into yellow, then white
-const vec3 AMBER = vec3(1., .17, .002);
-const vec3 DEEP  = vec3(.085, .008, .0);
-const vec3 HOT   = vec3(1., .31, .014);
-
-// how close a point is to the lit heart of the brain (1 at the heart)
-float heart(vec2 p){ vec2 q = (p - vec2(0., -.10))/vec2(.34, .40); return exp(-1.5*dot(q, q)); }
-
-vec3 shadeBrain(vec3 p, vec3 n, vec3 v, float h){
-  float ndv = clamp(dot(n, v), 0., 1.);
-  float crown = smoothstep(.08, .8, h);
-  float core = heart(p.xy)*uPulse;
-  // slow waves of light travelling through the folds
-  float wave = .5 + .5*sin(7.*h + 5.*length(p.xy - vec2(.0, -.1)) - uTime*.9);
-  core *= .86 + .22*wave;
-
-  // the amber surface, lit softly from the front; grooves fall off to a deep red-brown
-  vec3 c = mix(DEEP, AMBER*.9, crown)*(.12 + .88*ndv*ndv*ndv);
-  // light from within: the crowns near the heart burn yellow, the grooves between them stay orange
-  c += mix(vec3(1., .15, .002)*1.1, HOT*3.8, crown*crown)*core;
-  // thin edges let a little light through
-  c += vec3(1., .14, .0)*pow(1. - ndv, 2.5)*(.25 + .6*core);
-  // wet highlights
-  vec3 l1 = normalize(vec3(-.35, .55, .76)), l2 = normalize(vec3(.5, -.25, .83));
-  float s = pow(max(dot(n, normalize(l1 + v)), 0.), 90.)*1.3 + pow(max(dot(n, normalize(l2 + v)), 0.), 50.)*.5;
-  c += vec3(1., .7, .3)*s*crown;
-  return c;
-}
-
-/* ---------- jar ---------- */
 float sdBox2(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.)) + min(max(q.x, q.y), 0.) - r; }
 // the jar's profile, spun around the y axis: q = (distance from the axis, height)
 float jar2(vec2 q){
@@ -116,66 +170,43 @@ vec3 jarNormal(vec3 p){
   return normalize(vec3(g.x*p.x/r, g.y, g.x*p.z/r));
 }
 
-// the dark studio around the jar: two tall strip lights beside and a little behind it
-vec3 env(vec3 r){
-  float a  = abs(atan(r.x, -r.z));              // 0 = straight behind the jar
-  float el = asin(clamp(r.y, -1., 1.));
-  float side = r.x < 0. ? 1. : .82;
-  float strip = smoothstep(.20, .07, abs(a - 1.30))*smoothstep(1.12, .45, abs(el));
-  float thin  = smoothstep(.05, .015, abs(a - .78))*smoothstep(.9, .3, abs(el));
-  float back  = smoothstep(.75, 0., a)*(.5 + .5*smoothstep(-.6, .5, r.y));
-  float top   = smoothstep(.55, .98, r.y);
-  return vec3(.93, .96, 1.)*(strip*15.*side + thin*2. + back*.24 + top*2.2 + .01);
-}
-
 float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x*p.y); }
 
+// one soft tap of a blurred copy of the brain
+vec4 soft(vec2 uv, float lod){
+  vec2 px = exp2(lod)/uRes*.75;
+  return (textureLod(uSpecimen, uv + px*vec2(1., 1.), lod) + textureLod(uSpecimen, uv + px*vec2(-1., 1.), lod)
+        + textureLod(uSpecimen, uv + px*vec2(1., -1.), lod) + textureLod(uSpecimen, uv + px*vec2(-1., -1.), lod))*.25;
+}
+
 void main(){
+  vec2 uv = gl_FragCoord.xy/uRes;
   vec2 sp = (gl_FragCoord.xy - .5*uRes)/uRes.y*uView;
   vec3 ro = uCamPos;
   vec3 rd = normalize(uCam*vec3(sp, -CAM_D));
 
-  vec3 col = vec3(0.);
+  // blur levels are picked by size on screen, so the glow looks the same at any resolution
+  float L = log2(uRes.y/uView);                 // log2 of pixels per world unit
+  vec4 specimen = texture(uSpecimen, uv);
+  vec3 brain = specimen.rgb/uScale;
+  float cover = specimen.a;
 
-  // nothing lives outside this sphere
+  // light bleeding off the brain: a tight bright fringe, a soft glow, and a faint veil in the liquid
+  vec3 bloom = soft(uv, L - 6.3).rgb*.36 + soft(uv, L - 5.3).rgb*.34 + soft(uv, L - 4.3).rgb*.30
+             + soft(uv, L - 3.3).rgb*.20 + soft(uv, L - 2.4).rgb*.08;
+  bloom /= uScale;
+  float nearby = soft(uv, L - 3.6).a;
+
+  vec3 front = vec3(0.), behind = vec3(0.);
+  float trans = 1.;
+
+  // the jar lives inside this sphere
   float bb = dot(ro, rd), bc = dot(ro, ro) - 1.32*1.32, bh = bb*bb - bc;
   if (bh > 0.){
-    float tIn = -bb - sqrt(bh), tOut = -bb + sqrt(bh);
-
-    /* brain */
-    vec3 bo = uBrainRot*(ro - uBrainPos), bd = uBrainRot*rd;
-    vec3 so = bo/(BR + .01), sd = bd/(BR + .01);       // into the space where its bounds are a unit sphere
-    float sa = dot(sd, sd), sb = dot(so, sd), sc = dot(so, so) - 1., sh = sb*sb - sa*sc;
-    float tBrain = 1e9, dMin = 1e9;
-    vec3 brainCol = vec3(0.);
-    vec3 pNear = bo - bd*(sb/sa);                      // where the ray passes closest
-    if (sh > 0.){
-      float t = (-sb - sqrt(sh))/sa, tEnd = (-sb + sqrt(sh))/sa;
-      float h; bool hit = false;
-      for (int i = 0; i < 80; i++){
-        float d = sdBrain(bo + bd*t, h);
-        dMin = min(dMin, d);
-        if (d < .0012){ hit = true; break; }
-        t += d*.5;
-        if (t > tEnd) break;
-      }
-      if (hit){
-        vec3 p = bo + bd*t;
-        brainCol = shadeBrain(egg(p), brainNormal(p), -bd, h);
-        tBrain = t; dMin = 0.;
-      } else {
-        // looking straight down the split: the light inside shows through
-        brainCol = HOT*5.*heart(pNear.xy)*uPulse*smoothstep(.03, .0, abs(pNear.x));
-      }
-    } else {
-      dMin = max(sdEll(egg(pNear)), 0.);
-    }
-
-    /* glass: walk through every surface the ray crosses in front of the brain */
-    vec3 glass = vec3(0.);
-    float trans = 1., sgn = 1., t = max(tIn, 0.);
+    float tIn = -bb - sqrt(bh), tOut = -bb + sqrt(bh), tMid = -bb;
+    // walk through every glass surface the ray crosses
+    float sgn = 1., t = max(tIn, 0.);
     int crossings = 0;
-    float tStop = min(tOut, tBrain);
     for (int i = 0; i < 110; i++){
       vec3 p = ro + rd*t;
       float d = jar(p)*sgn;
@@ -185,41 +216,49 @@ void main(){
         float ndv = clamp(-dot(n, rd), 0., 1.);
         float F = .035 + .965*pow(1. - ndv, 5.);
         vec3 r = reflect(rd, n);
-        vec3 e = env(r);
+        vec3 e = studio(r);
         // the brain's glow, mirrored and smeared in the glass
         vec3 toB = uBrainPos - p; float tb = max(dot(toB, r), 0.);
         float miss = length(toB - r*tb);
-        e += AMBER*uPulse*.45*smoothstep(.7, .2, miss)*step(.001, tb);
-        float w = crossings < 2 ? 1. : .4;                 // the far wall reads much fainter
-        glass += trans*w*(F*e + vec3(.55, .6, .66)*.02*pow(1. - ndv, 1.5));
-        crossings++;
+        e += AMBER*uPulse*.5*smoothstep(.7, .2, miss)*step(.001, tb);
+        // amber light caught in the thick base and under the lip
+        float base = smoothstep(-.78, -.86, p.y)*smoothstep(.42, .36, length(p.xz)), rim = smoothstep(.93, 1.02, p.y);
+        vec3 caught = vec3(1., .22, .004)*uPulse*(base*.03 + rim*.012)*(.4 + .6*(1. - ndv));
+        float w = crossings < 2 ? 1. : .4;         // the far wall reads much fainter
+        vec3 add = trans*(w*(F*e + vec3(.55, .6, .66)*.02*pow(1. - ndv, 1.5)) + caught);
+        if (t < tMid) front += add; else behind += add;
         trans *= (1. - F)*.985;
+        crossings++;
         sgn = -sgn;
         t += .003;
       } else {
         t += max(d, .0012);
       }
-      if (t > tStop) break;
+      if (t > tOut) break;
     }
-
-    // light bleeding off the brain into the air around it
-    vec3 halo = vec3(1., .30, .003)*1.3*exp(-dMin*22.) + AMBER*.4*exp(-dMin*9.);
-    halo *= smoothstep(.34, .03, dMin);
-    halo *= uPulse;
-
-    // the faint parts of the glass break up into a printed dot screen, as in the reference
-    float lum = dot(glass, vec3(.3, .55, .15));
-    float cell = uRes.y/300.;
-    vec2 gp = gl_FragCoord.xy/cell;
-    vec2 gq = fract(vec2(gp.x + gp.y, gp.x - gp.y)*.7071) - .5;
-    float rad = sqrt(clamp(lum*2.4, 0., 1.))*.62;
-    float dots = smoothstep(rad + .7/cell, rad - .7/cell, length(gq));
-    glass = mix(glass*dots*1.9, glass, smoothstep(.16, .5, lum));
-
-    col = (brainCol + halo*(tBrain < 1e8 ? .35 : 1.))*trans + glass;
   }
 
-  col = 1. - exp(-col*1.25);
+  // what sits behind the brain is hidden by it
+  vec3 glass = front + behind*(1. - cover);
+
+  // the faint parts of the glass break up into a printed dot screen, as in the reference
+  float lum = dot(glass, vec3(.3, .55, .15));
+  float cell = max(uRes.y/300., 2.);
+  vec2 gp = gl_FragCoord.xy/cell;
+  vec2 gq = fract(vec2(gp.x + gp.y, gp.x - gp.y)*.7071) - .5;
+  float rad = sqrt(clamp(lum*2.4, 0., 1.))*.62;
+  float dots = smoothstep(rad + .7/cell, rad - .7/cell, length(gq));
+  glass = mix(glass*dots*1.9, glass, smoothstep(.16, .5, lum));
+
+  // the same screen, very faintly, in the lit liquid around the brain
+  vec2 hq = fract(gp*.5) - .5;
+  float speck = smoothstep(.2, .08, length(hq))*nearby*(1. - cover);
+
+  vec3 col = brain*mix(1., .93, cover) + bloom*(1. - .55*cover) + glass + vec3(1., .3, .01)*speck*.05;
+
+  col = 1. - exp(-col*1.3);
+  // a touch of filmic contrast: deepen the shadows, keep the highlights
+  col = mix(col, col*col*(3. - 2.*col), .35);
   col = pow(col, vec3(1./2.2));
   col += (hash(gl_FragCoord.xy + fract(uTime)*61.) - .5)/255.;   // breaks up banding in the dark
   outColor = vec4(col, 1.);
@@ -227,85 +266,115 @@ void main(){
 </script>
 
 <script>
-(() => {
-  const cv = document.getElementById('cv');
+(async () => {
+  const cv = document.getElementById('cv'), note = document.getElementById('note');
+  const fail = msg => { if (msg) note.textContent = msg; note.classList.add('on'); };
   const gl = cv.getContext('webgl2', { antialias:false, alpha:false, powerPreference:'high-performance' });
-  if (!gl){ document.getElementById('nogl').classList.add('on'); return; }
+  if (!gl) return fail();
 
-  /* ---- the folds: a labyrinth grown from noise (activator / inhibitor), used as a height map */
-  function makeFolds(N, ra, ri, iters){
-    let s = 20261126;
-    const rnd = () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0)/4294967296; };
-    const v = new Float32Array(N*N), A = new Float32Array(N*N), B = new Float32Array(N*N), T = new Float32Array(N*N);
-    for (let i = 0; i < v.length; i++) v[i] = rnd()*2 - 1;
-    const pass = (src, dst, r, dx) => {            // box blur along one axis, wrapping at the edges
-      const w = 2*r + 1;
-      for (let j = 0; j < N; j++){
-        let sum = 0;
-        for (let k = -r; k <= r; k++){ const i = (k + N) % N; sum += dx ? src[j*N + i] : src[i*N + j]; }
-        for (let i = 0; i < N; i++){
-          if (dx) dst[j*N + i] = sum/w; else dst[i*N + j] = sum/w;
-          const out = (i - r + N) % N, inn = (i + r + 1) % N;
-          sum += dx ? src[j*N + inn] - src[j*N + out] : src[inn*N + j] - src[out*N + j];
-        }
-      }
-    };
-    const blur = (src, dst, r) => { pass(src, T, r, 1); pass(T, dst, r, 0); pass(dst, T, r, 1); pass(T, dst, r, 0); };
-    for (let it = 0; it < iters; it++){
-      blur(v, A, ra); blur(v, B, ri);
-      for (let i = 0; i < v.length; i++) v[i] = Math.tanh(1.6*(v[i] + 4*(A[i] - B[i]) + .2));
+  /* ---- programs */
+  const src = id => document.getElementById(id).textContent;
+  const withStudio = s => s.replace('//STUDIO', src('studio'));
+  function program(vs, fs){
+    const p = gl.createProgram();
+    for (const [type, text] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]){
+      const s = gl.createShader(type); gl.shaderSource(s, text.trim()); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      gl.attachShader(p, s);
     }
-    blur(v, A, ra - 2);                            // soften, so the crowns come out round
-    const out = new Uint8Array(N*N);
-    for (let i = 0; i < out.length; i++){
-      const x = Math.min(1, Math.max(0, A[i]*.75 + .5));
-      out[i] = Math.round(255*Math.sqrt(1 - (1 - x)*(1 - x)));
-    }
-    return out;
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const u = {};
+    for (let i = 0, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); i < n; i++){ const name = gl.getActiveUniform(p, i).name; u[name] = gl.getUniformLocation(p, name); }
+    return { p, u };
+  }
+  const brainProg = program(src('brain-vs'), withStudio(src('brain-fs')));
+  const sceneProg = program('#version 300 es\nvoid main(){ vec2 p = vec2(gl_VertexID == 1 ? 3. : -1., gl_VertexID == 2 ? 3. : -1.); gl_Position = vec4(p, 0., 1.); }', withStudio(src('scene-fs')));
+
+  /* ---- the model: 48 bytes a vertex (position, normal, uv, tangent, handedness), 16-bit triangles */
+  let verts, tris, tissueImg, normalImg;
+  try {
+    const bin = async path => { const r = await fetch(path); if (!r.ok) throw new Error(path); return r.arrayBuffer(); };
+    const img = async path => { const i = new Image(); i.src = path; await i.decode(); return i; };
+    [verts, tris, tissueImg, normalImg] = await Promise.all([bin('assets/anatomy.bin'), bin('assets/triangles.bin'), img('assets/tissue.webp'), img('assets/normals.webp')]);
+  } catch (e) {
+    return fail('The brain model could not be loaded. Open this page through a web server rather than straight from disk.');
+  }
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+  [[0, 3, 0], [1, 3, 12], [2, 2, 24], [3, 3, 32]].forEach(([loc, n, off]) => { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 48, off); });
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, tris, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  const triCount = tris.byteLength/2;
+
+  const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
+  function imageTexture(image){
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, 4);
+    return t;
+  }
+  const tissue = imageTexture(tissueImg), normals = imageTexture(normalImg);
+
+  /* ---- the brain is drawn off-screen first (smooth-edged, in high range where the device allows),
+          then its mip chain gives the blurred copies the glow is built from */
+  const hdr = !!gl.getExtension('EXT_color_buffer_float') || !!gl.getExtension('EXT_color_buffer_half_float');
+  const FORMAT = hdr ? gl.RGBA16F : gl.RGBA8, SCALE = hdr ? 1 : 1/5;
+  const samples = Math.min(4, gl.getParameter(gl.MAX_SAMPLES));
+  const msFbo = gl.createFramebuffer(), msColor = gl.createRenderbuffer(), msDepth = gl.createRenderbuffer();
+  const resFbo = gl.createFramebuffer(), specimen = gl.createTexture();
+  function allocate(w, h){
+    gl.bindRenderbuffer(gl.RENDERBUFFER, msColor); gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, FORMAT, w, h);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, msDepth); gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.DEPTH_COMPONENT16, w, h);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, msFbo);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msColor);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, msDepth);
+    gl.bindTexture(gl.TEXTURE_2D, specimen);
+    gl.texImage2D(gl.TEXTURE_2D, 0, FORMAT, w, h, 0, gl.RGBA, hdr ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, resFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, specimen, 0);
   }
 
-  const sh = (type, src) => {
-    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-    return s;
-  };
-  const prog = gl.createProgram();
-  gl.attachShader(prog, sh(gl.VERTEX_SHADER, '#version 300 es\nvoid main(){ vec2 p = vec2(gl_VertexID == 1 ? 3. : -1., gl_VertexID == 2 ? 3. : -1.); gl_Position = vec4(p, 0., 1.); }'));
-  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent));
-  gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
-  gl.useProgram(prog);
-  const U = {};
-  for (const n of ['uRes','uTime','uView','uCamPos','uCam','uBrainRot','uBrainPos','uPulse','uFold']) U[n] = gl.getUniformLocation(prog, n);
-
-  const N = 384;
-  gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, N, N, 0, gl.RED, gl.UNSIGNED_BYTE, makeFolds(N, 4, 9, 30));
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-  gl.uniform1i(U.uFold, 0);
-
   /* ---- sizing: sharp, but never more pixels than the shader can comfortably fill */
-  const MAX_PIXELS = 2.4e6;
+  const MAX_PIXELS = 2.6e6;
   let W = 0, H = 0;
   function resize(){
     const cw = cv.clientWidth, ch = cv.clientHeight;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
     dpr = Math.min(dpr, Math.sqrt(MAX_PIXELS/Math.max(1, cw*ch)));
     const w = Math.max(1, Math.round(cw*dpr)), h = Math.max(1, Math.round(ch*dpr));
-    if (w !== W || h !== H){ W = cv.width = w; H = cv.height = h; gl.viewport(0, 0, W, H); }
+    if (w !== W || h !== H){ W = cv.width = w; H = cv.height = h; allocate(W, H); }
     draw();
   }
 
-  /* ---- motion */
+  /* ---- motion: the jar turns when dragged, and leans a little toward the pointer */
   const still = matchMedia('(prefers-reduced-motion: reduce)');
   const ptr = { x:0, y:0, tx:0, ty:0 };
-  addEventListener('pointermove', e => { ptr.tx = e.clientX/innerWidth*2 - 1; ptr.ty = e.clientY/innerHeight*2 - 1; });
-  addEventListener('pointerleave', () => { ptr.tx = ptr.ty = 0; });
-  document.addEventListener('mouseleave', () => { ptr.tx = ptr.ty = 0; });
+  const orbit = { yaw:0, pitch:0, tyaw:0, tpitch:0 };
+  let drag = null;
+  cv.addEventListener('pointerdown', e => { if (e.button) return; cv.setPointerCapture(e.pointerId); drag = { id:e.pointerId, x:e.clientX, y:e.clientY }; });
+  cv.addEventListener('pointermove', e => {
+    if (drag && drag.id === e.pointerId){
+      const k = 3.4/Math.min(innerWidth, innerHeight);
+      orbit.tyaw -= (e.clientX - drag.x)*k;
+      orbit.tpitch = Math.max(-1.1, Math.min(1.1, orbit.tpitch - (e.clientY - drag.y)*k));
+      drag.x = e.clientX; drag.y = e.clientY;
+    } else if (e.pointerType === 'mouse'){
+      ptr.tx = e.clientX/innerWidth*2 - 1; ptr.ty = e.clientY/innerHeight*2 - 1;
+    }
+    wake();
+  });
+  const release = e => { if (drag && drag.id === e.pointerId) drag = null; };
+  cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
+  cv.addEventListener('dblclick', () => { orbit.tyaw = Math.round(orbit.yaw/(2*Math.PI))*2*Math.PI; orbit.tpitch = 0; wake(); });
+  document.addEventListener('mouseleave', () => { ptr.tx = ptr.ty = 0; wake(); });
 
   const rotXY = (ax, ay) => {                      // rotate about x, then y (column-major mat3)
     const cx = Math.cos(ax), sx = Math.sin(ax), cy = Math.cos(ay), sy = Math.sin(ay);
@@ -315,26 +384,59 @@ void main(){
 
   let time = 0;
   function draw(){
-    const t = time;
+    if (!W) return;
+    const t = time, D = 9;
     // fit the jar: it is ~2.2 tall and ~2.05 wide
     const view = Math.max(3.11, 2.75*H/W);
-    // the camera sits a little above the jar's middle and drifts with the pointer
-    const pitch = -.085 - ptr.y*.07, yaw = ptr.x*.16;
-    const cam = rotXY(pitch, yaw);
-    const D = 9, ty = .015;
-    const camPos = [cam[6]*D, cam[7]*D + ty, cam[8]*D];
+    // the camera sits a little above the jar's middle
+    const cam = rotXY(-.085 - ptr.y*.06 + orbit.pitch, ptr.x*.14 + orbit.yaw);
+    const camPos = [cam[6]*D, cam[7]*D + .015, cam[8]*D];
+    const envRot = transpose(rotXY(0, orbit.yaw));
     // the brain hangs in the liquid: it bobs and sways very slightly
-    const brain = rotXY(Math.sin(t*.37)*.045 - ptr.y*.05, Math.sin(t*.23 + 1.3)*.07 + ptr.x*.08);
+    const brain = rotXY(Math.sin(t*.37)*.04 - ptr.y*.04, Math.sin(t*.23 + 1.3)*.06 + ptr.x*.06);
+    const brainPos = [0, -.03 + Math.sin(t*.5)*.012, 0];
     const pulse = 1 + .07*Math.sin(t*.8) + .03*Math.sin(t*2.1 + .7);
 
-    gl.uniform2f(U.uRes, W, H);
-    gl.uniform1f(U.uTime, t);
-    gl.uniform1f(U.uView, view);
-    gl.uniform3fv(U.uCamPos, camPos);
-    gl.uniformMatrix3fv(U.uCam, false, cam);
-    gl.uniformMatrix3fv(U.uBrainRot, false, transpose(brain));
-    gl.uniform3f(U.uBrainPos, 0, -.035 + Math.sin(t*.5)*.012, 0);
-    gl.uniform1f(U.uPulse, pulse);
+    // 1: the brain
+    gl.bindFramebuffer(gl.FRAMEBUFFER, msFbo);
+    gl.viewport(0, 0, W, H);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+    gl.useProgram(brainProg.p);
+    let u = brainProg.u;
+    gl.uniformMatrix3fv(u.uBrain, false, brain);
+    gl.uniform3fv(u.uBrainPos, brainPos);
+    gl.uniform3fv(u.uCamPos, camPos);
+    gl.uniformMatrix3fv(u.uCamInv, false, transpose(cam));
+    gl.uniformMatrix3fv(u.uEnvRot, false, envRot);
+    gl.uniform2f(u.uProj, D/(.5*view*W/H), D/(.5*view));
+    gl.uniform1f(u.uPulse, pulse); gl.uniform1f(u.uTime, t); gl.uniform1f(u.uScale, SCALE);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tissue); gl.uniform1i(u.uTissue, 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, normals); gl.uniform1i(u.uNormals, 1);
+    gl.bindVertexArray(vao);
+    gl.drawElements(gl.TRIANGLES, triCount, gl.UNSIGNED_SHORT, 0);
+    gl.bindVertexArray(null);
+    gl.disable(gl.DEPTH_TEST);
+
+    // 2: smooth its edges into a texture, and blur it down the mip chain
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, msFbo); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, resFbo);
+    gl.blitFramebuffer(0, 0, W, H, 0, 0, W, H, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, specimen);
+    gl.generateMipmap(gl.TEXTURE_2D);
+
+    // 3: the jar, the glow, and the final picture
+    gl.useProgram(sceneProg.p);
+    u = sceneProg.u;
+    gl.uniform2f(u.uRes, W, H);
+    gl.uniform1f(u.uTime, t);
+    gl.uniform1f(u.uView, view);
+    gl.uniform3fv(u.uCamPos, camPos);
+    gl.uniformMatrix3fv(u.uCam, false, cam);
+    gl.uniformMatrix3fv(u.uEnvRot, false, envRot);
+    gl.uniform3fv(u.uBrainPos, brainPos);
+    gl.uniform1f(u.uPulse, pulse); gl.uniform1f(u.uScale, SCALE);
+    gl.uniform1i(u.uSpecimen, 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
@@ -342,24 +444,27 @@ void main(){
   function frame(now){
     raf = 0;
     const dt = Math.min(.05, (now - last)/1000 || 0); last = now;
-    time += dt;
-    const k = 1 - Math.exp(-dt*4);
+    const k = still.matches ? 1 : 1 - Math.exp(-dt*5);
+    if (!still.matches) time += dt;
     ptr.x += (ptr.tx - ptr.x)*k; ptr.y += (ptr.ty - ptr.y)*k;
+    orbit.yaw += (orbit.tyaw - orbit.yaw)*k; orbit.pitch += (orbit.tpitch - orbit.pitch)*k;
     draw();
-    play();
+    if (!still.matches) wake();
   }
-  function play(){ if (!raf && !document.hidden && !still.matches) raf = requestAnimationFrame(frame); }
-  document.addEventListener('visibilitychange', () => { last = performance.now(); play(); });
-  still.addEventListener('change', () => { last = performance.now(); play(); });
-  addEventListener('pointermove', () => { if (still.matches) { ptr.x = ptr.tx; ptr.y = ptr.ty; draw(); } });
+  function wake(){ if (!raf && !document.hidden) raf = requestAnimationFrame(frame); }
+  document.addEventListener('visibilitychange', () => { last = performance.now(); wake(); });
+  still.addEventListener('change', () => { last = performance.now(); wake(); });
+  cv.addEventListener('webglcontextlost', e => e.preventDefault());
+  cv.addEventListener('webglcontextrestored', () => location.reload());
 
   new ResizeObserver(resize).observe(cv);
   resize();
+  cv.classList.add('on');
   last = performance.now();
-  play();
+  wake();
 
-  window.__brain = { draw, setTime: v => { time = v; draw(); } };
-})();
+  window.__brain = { draw, orbit, set: (yaw, pitch, t) => { orbit.yaw = orbit.tyaw = yaw; orbit.pitch = orbit.tpitch = pitch; if (t != null) time = t; draw(); } };
+})().catch(e => { console.error(e); const n = document.getElementById('note'); n.textContent = 'Something went wrong drawing this piece.'; n.classList.add('on'); });
 </script>
 </body>
 </html>
