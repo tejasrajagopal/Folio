@@ -28,17 +28,41 @@
 <!-- shared: the dark studio that the glass and the wet surface of the brain both mirror -->
 <script id="studio" type="x-shader/x-fragment">
 uniform mat3 uEnvRot;     // keeps the lights with the camera as the jar is turned
+// a soft-edged panel of light, in angle space: 1 inside, falling to 0 over `soft`
+float panel(vec2 p, vec2 half_, float soft){
+  vec2 d = abs(p) - half_;
+  return smoothstep(soft, 0., max(d.x, d.y));
+}
+// What the room looks like in direction r. Everything that shines mirrors this:
+// a tall softbox on the left, a paned window on the right,
+// a lamp overhead, and a dim floor and back wall.
 vec3 studio(vec3 r){
   r = uEnvRot*r;
-  float a  = abs(atan(r.x, -r.z));              // 0 = straight behind the jar
+  float az = atan(r.x, -r.z);                    // 0 = straight behind the jar, + to the right
   float el = asin(clamp(r.y, -1., 1.));
-  float side = r.x < 0. ? 1. : .8;
-  // two tall strip lights beside and a little behind the jar
-  float strip = smoothstep(.21, .08, abs(a - 1.30))*smoothstep(1.12, .45, abs(el));
-  float thin  = smoothstep(.05, .015, abs(a - .78))*smoothstep(.9, .3, abs(el));
-  float back  = smoothstep(.75, 0., a)*(.5 + .5*smoothstep(-.6, .5, r.y));
-  float top   = smoothstep(.55, .98, r.y);
-  return vec3(.93, .96, 1.)*(strip*15.*side + thin*2. + back*.13 + top*2.2 + .01);
+  vec3 c = vec3(.008, .009, .011);
+
+  // left: a tall softbox, a touch brighter toward its middle, with the seam of its diffuser
+  vec2 lp = vec2(az + 1.30, el - .08);
+  float box = panel(lp, vec2(.115, .86), .07);
+  box *= (.72 + .28*exp(-lp.y*lp.y*2.))*(1. - .35*smoothstep(.012, .004, abs(lp.y + .22)));
+  c += vec3(.94, .97, 1.)*box*15.;
+
+  // right: daylight through a window, two panes wide and three high
+  vec2 wp = vec2(az - 1.27, el - .10);
+  float win = panel(wp, vec2(.15, .72), .035);
+  float bars = smoothstep(.006, .016, abs(wp.x))
+             *smoothstep(.010, .022, abs(wp.y - .24))*smoothstep(.010, .022, abs(wp.y + .24));
+  c += vec3(1., .95, .86)*win*bars*11.;
+
+  // a thin kicker further behind, the hard line near the jar's edge
+  c += vec3(.9, .95, 1.)*smoothstep(.045, .012, abs(abs(az) - .78))*smoothstep(.9, .3, abs(el))*1.6;
+
+  // overhead lamp, the back wall's faint glow, and a little bounce off the floor
+  c += vec3(1., .97, .92)*smoothstep(.88, .98, r.y)*1.1;
+  c += vec3(.8, .88, 1.)*smoothstep(.75, 0., abs(az))*(.5 + .5*smoothstep(-.6, .5, r.y))*.07;
+  c += vec3(.5, .45, .4)*smoothstep(-.35, -.95, r.y)*.05;
+  return c;
 }
 </script>
 
@@ -162,6 +186,8 @@ uniform vec3  uCamPos;
 uniform mat3  uCam;       // camera basis (columns: right, up, back)
 uniform vec3  uBrainPos;
 uniform float uPulse, uScale;
+uniform mat3  uCamInv;
+uniform vec2  uProjUV;     // world offset at the jar -> screen uv
 uniform sampler2D uSpecimen;   // the brain, already drawn, with its blurred copies in the mip chain
 out vec4 outColor;
 //STUDIO
@@ -215,10 +241,11 @@ void main(){
   float cover = specimen.a;
 
   // light bleeding off the brain: a tight bright fringe, a soft glow, and a faint veil in the liquid
-  vec3 bloom = soft(uv, L - 6.3).rgb*.36 + soft(uv, L - 5.3).rgb*.34 + soft(uv, L - 4.3).rgb*.30
-             + soft(uv, L - 3.3).rgb*.20 + soft(uv, L - 2.4).rgb*.08;
+  vec3 bloom = soft(uv, L - 6.3).rgb*.36 + soft(uv, L - 5.3).rgb*.34 + soft(uv, L - 4.3).rgb*.20
+             + soft(uv, L - 3.3).rgb*.07 + soft(uv, L - 2.4).rgb*.015;
   bloom /= uScale;
 
+  vec3 glowCol = textureLod(uSpecimen, vec2(.5), L - 1.5).rgb/uScale;   // the brain's light, averaged
   vec3 front = vec3(0.), behind = vec3(0.);
   float trans = 1.;
 
@@ -239,15 +266,21 @@ void main(){
         float F = .035 + .965*pow(1. - ndv, 5.);
         vec3 r = reflect(rd, n);
         vec3 e = studio(r);
-        // the brain's glow, mirrored and smeared in the glass
-        vec3 toB = uBrainPos - p; float tb = max(dot(toB, r), 0.);
-        float miss = length(toB - r*tb);
-        e += AMBER*uPulse*.5*smoothstep(.7, .2, miss)*step(.001, tb);
+        // the brain mirrored in the glass: follow the bounced ray to where it passes the brain,
+        // and take the colour the brain shows there (softened, as curved glass smears it)
+        vec3 toB = uBrainPos - p; float tb = dot(toB, r);
+        vec3 mirrored = vec3(0.);
+        if (tb > 0.){
+          vec3 pc = uCamInv*(p + r*tb - uCamPos);
+          vec2 muv = .5 + pc.xy/(-pc.z)*uProjUV;
+          float inside = dot(n, toB) > 0. ? 1. : .35;      // the inner faces see it best
+          mirrored = soft(muv, L - 5.).rgb/uScale*inside;
+        }
         // amber light caught in the thick base and under the lip
         float base = smoothstep(-.78, -.86, p.y)*smoothstep(.42, .36, length(p.xz)), rim = smoothstep(.93, 1.02, p.y);
-        vec3 caught = vec3(1., .22, .004)*uPulse*(base*.03 + rim*.012)*(.4 + .6*(1. - ndv));
+        vec3 caught = glowCol*(base*.10 + rim*.02)*(.4 + .6*(1. - ndv));
         float w = crossings < 2 ? 1. : .4;         // the far wall reads much fainter
-        vec3 add = trans*(w*(F*e + vec3(.55, .6, .66)*.008*pow(1. - ndv, 1.5)) + caught);
+        vec3 add = trans*(w*(F*e + vec3(.55, .6, .66)*.008*pow(1. - ndv, 1.5)) + mirrored*F*.2 + caught);
         if (t < tMid) front += add; else behind += add;
         trans *= (1. - F)*.985;
         crossings++;
@@ -446,6 +479,8 @@ void main(){
     gl.uniform3fv(u.uBrainPos, brainPos);
     gl.uniform1f(u.uPulse, pulse); gl.uniform1f(u.uScale, SCALE);
     gl.uniform1i(u.uSpecimen, 0);
+    gl.uniformMatrix3fv(u.uCamInv, false, transpose(cam));
+    gl.uniform2f(u.uProjUV, D/(view*W/H), D/view);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
