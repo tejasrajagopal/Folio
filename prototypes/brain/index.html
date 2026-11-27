@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#000000">
 <title>Brain in a jar — prototype</title>
 <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../vendor/styles.css">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;background:#000;overflow:hidden}
@@ -21,13 +22,14 @@
 </style>
 </head>
 <body>
-<canvas id="cv" aria-label="A glowing amber brain floating inside a round glass jar. Drag to turn it; double click to reset."></canvas>
+<canvas id="cv" aria-label="A glowing amber brain floating in dark water inside a round glass jar. Drag to tilt the jar; double click to set it straight."></canvas>
 <p class="note" id="note">This piece needs WebGL 2, which this browser doesn't offer.</p>
 <p class="credit">Brain model: <a href="https://sketchfab.com/3d-models/human-brain-7a27c17fd6c0488bb31ab093236a47fb" rel="noopener">Human Brain</a> by 3DRT STUDIOS, <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>, reshaded in amber</p>
 
 <!-- shared: the dark studio that the glass and the wet surface of the brain both mirror -->
 <script id="studio" type="x-shader/x-fragment">
-uniform mat3 uEnvRot;     // keeps the lights with the camera as the jar is turned
+uniform mat3 uEnvRot;     // the room's orientation (fixed: only the jar turns)
+uniform vec4 uLights;     // softbox, window, overhead lamp, edge kicker
 // a soft-edged panel of light, in angle space: 1 inside, falling to 0 over `soft`
 float panel(vec2 p, vec2 half_, float soft){
   vec2 d = abs(p) - half_;
@@ -46,20 +48,20 @@ vec3 studio(vec3 r){
   vec2 lp = vec2(az + 1.30, el - .08);
   float box = panel(lp, vec2(.115, .86), .07);
   box *= (.72 + .28*exp(-lp.y*lp.y*2.))*(1. - .35*smoothstep(.012, .004, abs(lp.y + .22)));
-  c += vec3(.94, .97, 1.)*box*15.;
+  c += vec3(.94, .97, 1.)*box*15.*uLights.x;
 
   // right: daylight through a window, two panes wide and three high
   vec2 wp = vec2(az - 1.27, el - .10);
   float win = panel(wp, vec2(.15, .72), .035);
   float bars = smoothstep(.006, .016, abs(wp.x))
              *smoothstep(.010, .022, abs(wp.y - .24))*smoothstep(.010, .022, abs(wp.y + .24));
-  c += vec3(1., .95, .86)*win*bars*11.;
+  c += vec3(1., .95, .86)*win*bars*11.*uLights.y;
 
   // a thin kicker further behind, the hard line near the jar's edge
-  c += vec3(.9, .95, 1.)*smoothstep(.045, .012, abs(abs(az) - .78))*smoothstep(.9, .3, abs(el))*1.6;
+  c += vec3(.9, .95, 1.)*smoothstep(.045, .012, abs(abs(az) - .78))*smoothstep(.9, .3, abs(el))*1.6*uLights.w;
 
   // overhead lamp, the back wall's faint glow, and a little bounce off the floor
-  c += vec3(1., .97, .92)*smoothstep(.88, .98, r.y)*1.1;
+  c += vec3(1., .97, .92)*smoothstep(.88, .98, r.y)*1.1*uLights.z;
   c += vec3(.8, .88, 1.)*smoothstep(.75, 0., abs(az))*(.5 + .5*smoothstep(-.6, .5, r.y))*.07;
   c += vec3(.5, .45, .4)*smoothstep(-.35, -.95, r.y)*.05;
   return c;
@@ -75,12 +77,12 @@ uniform mat3 uBrain;      // brain -> world
 uniform vec3 uBrainPos, uCamPos;
 uniform mat3 uCamInv;
 uniform vec2 uProj;
-uniform float uPulse;
+uniform float uSwell;     // size on this beat (1 = at rest)
 out vec3 vL, vW, vN, vT;
 out vec2 vUV;
 const vec3 SC = vec3(1.14, .985, .96)*.74;    // the water magnifies it back up
 void main(){
-  vec3 w = uBrain*(aPos*SC*(1. + .035*(uPulse - .9))) + uBrainPos;
+  vec3 w = uBrain*(aPos*SC*uSwell) + uBrainPos;
   vL = aPos; vW = w; vUV = aUV;
   vN = uBrain*(aNor/SC); vT = uBrain*(aTan*SC);
   vec3 pc = uCamInv*(w - uCamPos);
@@ -95,15 +97,17 @@ uniform sampler2D uTissue, uNormals;
 uniform mat3 uBrain;
 uniform vec3 uBrainPos, uCamPos;
 uniform float uPulse, uTime, uScale;
+uniform vec3 uBody, uCore;     // the amber of the brain, and the hotter colour of its heart
+uniform float uGlow, uRimB, uWet, uSpec, uBeatPhase, uBeatWave;
 in vec3 vL, vW, vN, vT;
 in vec2 vUV;
 out vec4 outColor;
 //STUDIO
 
 // colours are linear light: the tone curve at the end turns strong orange into yellow, then white
-const vec3 AMBER = vec3(1., .165, .002);
-const vec3 DEEP  = vec3(.075, .006, .0);
-const vec3 HOT   = vec3(1., .295, .013);
+#define AMBER uBody
+#define HOT uCore
+#define DEEP (uBody*vec3(.075, .036, .0))
 
 // a heat wave radiates from low in the cortex and bends around the folds
 float heatPhase(vec3 p, float ridge){
@@ -140,28 +144,27 @@ void main(){
   vec3 c = mix(DEEP, AMBER*.62, crown)*(.05 + .95*ndv*ndv);
   c *= 1. - .5*vein;
   // light from within: crowns near the heart burn yellow, the grooves between them stay orange
-  c += mix(vec3(1., .11, .001)*.75, HOT*4.4, crown*crown*crown)*pow(core, 1.4)*(.45 + .55*ndv);
+  c += mix(AMBER*.75, HOT*4.4, crown*crown*crown)*pow(core, 1.4)*(.45 + .55*ndv)*uGlow;
   // the split between the halves is a seam of light
   float seam = smoothstep(.05, .0, abs(vL.x))*smoothstep(-.1, .25, vL.z);
-  c += HOT*2.6*seam*(.25 + core);
+  c += HOT*2.6*seam*(.25 + core)*uGlow;
   // thin edges let light through
-  c += vec3(1., .13, .0)*pow(1. - gdv, 2.6)*(.35 + .9*core);
+  c += AMBER*pow(1. - gdv, 2.6)*(.35 + .9*core)*uRimB;
 
   // the pulse: a wave of light runs out from low in the cortex on every beat, in amber only
-  float beat = uTime*.87*6.2831853;             // one wave per heartbeat
-  float wave2 = .5 + .5*cos(heatPhase(vL, crown) - beat);
+  float wave2 = .5 + .5*cos(heatPhase(vL, crown) - uBeatPhase*6.2831853);   // one wave per heartbeat
   wave2 = pow(wave2, 3.);
-  c += mix(vec3(1., .10, .001), HOT*1.6, crown)*wave2*(.2 + .8*core)*.6*uPulse;
-  c *= .55 + .45*uPulse*uPulse;                  // the whole brain brightens on the beat
+  c += mix(AMBER, HOT*1.6, crown)*wave2*(.2 + .8*core)*.6*uBeatWave*uGlow;
+  c *= uPulse;                                    // the whole brain brightens on the beat
 
   // a wet, glassy skin: it mirrors the studio and carries tight highlights
   float F = .045 + .955*pow(1. - ndv, 5.);
-  c += studio(reflect(-v, n))*F*(.25 + .75*crown)*vec3(1., .62, .26)*.9;
+  c += studio(reflect(-v, n))*F*(.25 + .75*crown)*vec3(1., .62, .26)*.9*uWet;
   vec3 l1 = normalize(vec3(-.35, .55, .76)), l2 = normalize(vec3(.5, -.2, .84)), l3 = normalize(vec3(.1, .9, .42));
   float s = pow(max(dot(n, normalize(l1 + v)), 0.), 120.)*2.6
           + pow(max(dot(n, normalize(l2 + v)), 0.), 60.)*.7
           + pow(max(dot(n, normalize(l3 + v)), 0.), 90.)*1.2;
-  c += vec3(1., .80, .50)*s*(.2 + .8*crown);
+  c += vec3(1., .80, .50)*s*(.2 + .8*crown)*uSpec;
 
   outColor = vec4(c*uScale, 1.);
 }
@@ -178,6 +181,15 @@ uniform vec3  uCamPos;
 uniform mat3  uCam;       // camera basis (columns: right, up, back)
 uniform vec3  uBrainPos;
 uniform float uPulse, uScale;
+uniform mat3  uJar, uJarInv;  // the jar's own tilt (jar -> world, world -> jar); the brain and the sea stay put
+uniform float uSea;           // water level
+uniform vec3  uShallow, uDeep;
+uniform float uMurk, uClarity, uShafts, uMotes, uSwellAmp, uWaterGlow;
+uniform vec3  uRipples;       // seconds since each of the last three beats
+uniform float uRipple, uRippleSpeed;
+uniform float uGlassRefl, uGlassTint, uBloom, uBrainBehind;
+uniform float uExposure, uContrast, uSat;
+uniform vec3  uShadowTint;
 uniform mat3  uCamInv;
 uniform vec2  uProjUV;     // world offset at the jar -> screen uv
 uniform sampler2D uSpecimen;   // the brain, already drawn, with its blurred copies in the mip chain
@@ -185,7 +197,6 @@ out vec4 outColor;
 //STUDIO
 
 const float CAM_D = 9.0;
-const vec3 AMBER = vec3(1., .165, .002);
 
 float smin(float a, float b, float k){ float h = clamp(.5 + .5*(b - a)/k, 0., 1.); return mix(b, a, h) - k*h*(1. - h); }
 
@@ -202,24 +213,33 @@ float jar2(vec2 q){
   float foot = sdBox2(q - vec2(0., -.878), vec2(.365, .07), .028);
   return min(smin(shell, lip, .025), smin(shell, foot, .03));
 }
-float jar(vec3 p){ return jar2(vec2(length(p.xz), p.y)); }
+float jar(vec3 p){ p = uJarInv*p; return jar2(vec2(length(p.xz), p.y)); }
 vec3 jarNormal(vec3 p){
+  p = uJarInv*p;
   float r = max(length(p.xz), 1e-4);
   vec2 q = vec2(r, p.y);
   const vec2 e = vec2(.0015, 0.);
   vec2 g = vec2(jar2(q + e.xy) - jar2(q - e.xy), jar2(q + e.yx) - jar2(q - e.yx));
-  return normalize(vec3(g.x*p.x/r, g.y, g.x*p.z/r));
+  return uJar*normalize(vec3(g.x*p.x/r, g.y, g.x*p.z/r));
 }
 
 float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x*p.y); }
 
 /* ---------- the ocean in the jar ---------- */
-const float SEA = .73;                         // resting water level
+#define SEA uSea                               // resting water level
 const float BOWL = .986;                       // inner radius of the glass
+// a ring of ripple spreading from above the brain, `age` seconds after a beat
+float ring(float r, float age){
+  float front = r - age*uRippleSpeed;
+  return exp(-age*.75)*exp(-front*front*40.)*sin(front*30.);
+}
 float swell(vec2 p){
   float t = uTime;
-  return .020*sin(p.x*4.6 + t*1.5) + .015*sin(p.y*5.9 - t*1.15 + p.x*2.1)
-       + .009*sin((p.x + p.y)*10.5 + t*2.3) + .005*sin(p.x*17. - p.y*13. - t*3.1);
+  float h = .020*sin(p.x*4.6 + t*1.5) + .015*sin(p.y*5.9 - t*1.15 + p.x*2.1)
+          + .009*sin((p.x + p.y)*10.5 + t*2.3) + .005*sin(p.x*17. - p.y*13. - t*3.1);
+  float r = length(p - uBrainPos.xz);
+  float rings = ring(r, uRipples.x) + ring(r, uRipples.y) + ring(r, uRipples.z);
+  return h*uSwellAmp + rings*.05*uRipple;
 }
 vec3 swellNormal(vec2 p){
   const vec2 e = vec2(.004, 0.);
@@ -246,8 +266,8 @@ float motes(vec2 p, float scale, float rise, float seed){
   float live = step(.62, hash(id + seed + 5.3));
   return smoothstep(.07, .0, length(f - o*.7))*live;
 }
-const vec3 SHALLOW = vec3(.0, .36, .50);
-const vec3 DEEPSEA = vec3(.0, .012, .05);
+#define SHALLOW uShallow
+#define DEEPSEA uDeep
 
 // one soft tap of a blurred copy of the brain
 vec4 soft(vec2 uv, float lod){
@@ -295,7 +315,7 @@ bool traceBowl(vec3 ro, vec3 rd, float ng, float nw, out Path P){
   vec2 h = sph(ro, rd, R_OUT);
   if (h.x < 0.) return false;
   vec3 p = ro + rd*h.x;
-  if (p.y > BODY_TOP) return false;                     // the neck is drawn by the glass walk
+  if ((uJarInv*p).y > BODY_TOP) return false;           // the neck is drawn by the glass walk
   float dummy = 0.;
   vec3 n = p/R_OUT;
   P.keep *= 1. - schlick(-dot(rd, n), .04);
@@ -381,12 +401,18 @@ void main(){
     Path P;
     if (!traceBowl(ro, rd, NG[c], NW[c], P)) continue;
     insideBowl = 1.;
+    if (P.uv.x >= 0.){
+      vec2 c0 = toUV(uBrainPos), off = (P.uv - c0)*vec2(uRes.x/uRes.y, 1.)*uView;
+      float r = length(off);
+      float push = ring(r, uRipples.x) + ring(r, uRipples.y);
+      P.uv += normalize(off + 1e-5)/vec2(uRes.x/uRes.y, 1.)/uView*push*.02*uRipple;
+    }
     vec4 b = P.uv.x < 0. ? vec4(0.) : texture(uSpecimen, P.uv);
     // light from the room, bent by the whole jar (the ball of water turns it upside down)
-    float behindRoom = studio(P.exitDir)[c];
+    float behindRoom = studio(P.exitDir)[c]*uBrainBehind;
     float v = b[c]/uScale + (1. - b.a)*behindRoom;
     // glass is faintly green: long paths through it, at the edges, take on its colour
-    v *= exp(-P.glass*vec3(2.2, .55, 1.6)[c]);
+    v *= exp(-P.glass*vec3(2.2, .55, 1.6)[c]*uGlassTint);
     v *= P.keep;
     inner[c] = v;
     if (c == 1){ G = P; cover = b.a; }
@@ -401,24 +427,30 @@ void main(){
     vec2 bsp = (guv - .5)*vec2(uRes.x/uRes.y, 1.)*uView;
     float net = caustics(bsp*.9 + vec2(.13, .0), uTime*.55);
     inner *= 1. + net*1.4*smoothstep(-.5, .6, bsp.y)*cover;
-    inner += bloom*(1. - .85*cover)*G.keep;
+    inner += bloom*(1. - .85*cover)*G.keep*uBloom;
 
     float wet = mix(G.water, G.toBrain, cover);      // the brain hides the water behind it
     if (G.water > 0.){
       // water takes the red out of what is seen through it (Beer-Lambert), and lends its own colour
-      vec3 through = exp(-wet*vec3(.35, .12, .10)*.6);
+      vec3 through = exp(-wet*vec3(.35, .12, .10)*.6*uClarity);
       float lift = smoothstep(-.95, SEA, G.waterY);                    // 0 at the bottom, 1 at the surface
       vec3 body = mix(DEEPSEA, SHALLOW, lift*lift*lift);
       body *= .45 + .55*smoothstep(1., .35, length(sp - vec2(0., .1)));   // the sides of the ball sit in shadow
       // shafts of light slanting down from the surface
       float sx = sp.x*7. + sp.y*1.6;
       float shafts = pow(.5 + .5*sin(sx + uTime*.35)*sin(sx*2.3 - uTime*.5 + 1.7), 3.);
-      body *= 1. + 1.5*shafts*lift;
-      body += glowCol*.06*uPulse;                                      // the brain lights the water round it                                              // the brain lights the water round it
-      inner = inner*through + body*(1. - exp(-wet*1.1))*.5*G.keep;
+      body *= 1. + 1.5*shafts*lift*uShafts;
+      body += glowCol*.06*uPulse*uWaterGlow;                                      // the brain lights the water round it                                              // the brain lights the water round it
+      inner = inner*through + body*(1. - exp(-wet*1.1))*.5*G.keep*uMurk;
       // specks adrift and bubbles climbing
       float sparkle = motes(sp, 9., .05, 1.)*.5 + motes(sp, 17., .09, 2.)*.35 + motes(sp, 5.5, .16, 3.)*.9;
-      inner += vec3(.55, .85, .9)*sparkle*.4*(1. - .7*cover)*(.4 + .6*lift);
+      // each beat sends a faint ring of light rolling out through the water
+      vec2 rc = (uv - toUV(uBrainPos))*vec2(uRes.x/uRes.y, 1.)*uView;
+      float rr = length(rc);
+      float front = max(ring(rr, uRipples.x), 0.) + .6*max(ring(rr, uRipples.y), 0.);
+      vec3 hue = glowCol/max(max(glowCol.r, glowCol.g), 1e-4);          // the brain's colour, at full strength
+      inner += hue*front*.09*uRipple*(1. - cover)*smoothstep(.3, .5, rr)*G.keep;
+      inner += mix(vec3(.55, .85, .9), uShallow*3., .5)*sparkle*.4*uMotes*(1. - .7*cover)*(.4 + .6*lift);
     }
     if (G.surf > 0.){
       float ripple = caustics(G.surfP.xz*1.3, uTime*.6);
@@ -462,13 +494,14 @@ void main(){
           mirrored = soft(toUV(p + r*tb), L - 5.).rgb/uScale*inside;
         }
         // light caught in the thick base
-        float base = smoothstep(-.78, -.86, p.y)*smoothstep(.42, .36, length(p.xz));
+        vec3 pl = uJarInv*p;
+        float base = smoothstep(-.78, -.86, pl.y)*smoothstep(.42, .36, length(pl.xz));
         vec3 caught = glowCol*base*.10*(.4 + .6*(1. - ndv));
         // the bright line where the sea meets the glass (the meniscus)
         float line = smoothstep(.018, .0, abs(p.y - SEA - swell(p.xz)))*step(length(p), 1.);
         caught += vec3(.6, .9, .95)*line*.35;
         float w = crossings < 2 ? 1. : .35;        // the far wall reads much fainter
-        vec3 add = trans*(w*F*e + mirrored*F*.2 + caught);
+        vec3 add = trans*(w*F*e*uGlassRefl + mirrored*F*.2 + caught);
         if (t < tMid) front += add; else behind += add;
         trans *= (1. - F)*.985;
         crossings++;
@@ -486,15 +519,19 @@ void main(){
 
   vec3 col = inner + front;
 
-  col = 1. - exp(-col*1.3);
-  // a touch of filmic contrast: deepen the shadows, keep the highlights
-  col = mix(col, col*col*(3. - 2.*col), .35);
+  col = 1. - exp(-col*1.3*uExposure);
+  // the grade: filmic contrast, saturation, and a tint pressed into the shadows
+  col = mix(col, col*col*(3. - 2.*col), uContrast);
+  float luma = dot(col, vec3(.2126, .7152, .0722));
+  col = max(mix(vec3(luma), col, uSat), 0.);
+  col += uShadowTint*smoothstep(.004, .05, luma)*(1. - smoothstep(.05, .35, luma))*.1;   // true black stays black
   col = pow(col, vec3(1./2.2));
   col += (hash(gl_FragCoord.xy + fract(uTime)*61.) - .5)/255.;   // breaks up banding in the dark
   outColor = vec4(col, 1.);
 }
 </script>
 
+<script src="../../vendor/browser.global.js"></script>
 <script>
 (async () => {
   const cv = document.getElementById('cv'), note = document.getElementById('note');
@@ -584,51 +621,139 @@ void main(){
     draw();
   }
 
-  /* ---- motion: the jar turns when dragged, and leans a little toward the pointer */
+  /* ---- the controls: every light, the sea, the grade and the beat (DialKit) */
+  const cfg = {
+    Beat: {
+      bpm:[34, 10, 120, 1],              // beats a minute
+      strength:[.18, 0, 1, .01],         // how much brighter the brain gets on a beat
+      softness:[.75, 0, 1, .01],         // 0 = a sharp thump, 1 = a slow swell and fade
+      secondBeat:[.35, 0, 1, .01],       // the softer echo after the first thump
+      echoGap:[.2, .05, .45, .01],       // time between the two, as a share of the beat
+      swell:[.010, 0, .06, .001],        // how much the brain grows on a beat
+      lightWave:[.45, 0, 2, .01],        // the wave of light that runs through the folds
+    },
+    Ripples: {
+      height:[2, 0, 5, .01],             // rings on the surface, and the pressure wave through the water
+      speed:[.8, .1, 2, .01],
+    },
+    Brain: {
+      body:"#ff700f",
+      core:"#ff9223",
+      glow:[1, 0, 3, .01],
+      rimLight:[1, 0, 3, .01],
+      wetness:[1, 0, 3, .01],
+      highlights:[1, 0, 3, .01],
+      haloInWater:[.75, 0, 3, .01],
+    },
+    Jar: {
+      reflections:[1, 0, 3, .01],
+      softboxLeft:[1, 0, 3, .01],
+      windowRight:[1, 0, 3, .01],
+      lampAbove:[1, 0, 3, .01],
+      edgeLight:[1, 0, 3, .01],
+      glassTint:[1, 0, 4, .01],
+      roomThroughWater:[.45, 0, 2, .01],
+    },
+    Sea: {
+      level:[.73, .3, .85, .01],
+      surface:"#2c4a3e",
+      depths:"#030607",
+      murk:[1.7, 0, 4, .01],
+      clarity:[1.4, 0, 4, .01],          // higher = more of the brain's colour is absorbed
+      lightShafts:[.45, 0, 2, .01],
+      particles:[.8, 0, 3, .01],
+      swell:[.7, 0, 3, .01],
+      brainLightsWater:[.35, 0, 4, .01],
+    },
+    Grade: {
+      exposure:[.9, .2, 3, .01],
+      contrast:[.45, 0, 1, .01],
+      saturation:[.72, 0, 1.6, .01],
+      shadowTint:"#123030",
+    },
+  };
+  const cfgDefaults = c => {
+    const o = {};
+    for (const [k, v] of Object.entries(c)){
+      if (k === '_collapsed') continue;
+      o[k] = Array.isArray(v) ? v[0]
+        : (v && typeof v === 'object') ? (v.type === 'select' ? v.default : v.type ? v : cfgDefaults(v))
+        : v;
+    }
+    return o;
+  };
+  let P = cfgDefaults(cfg);
+  let raf = 0, last = 0;
+  try {
+    if (window.DialKit){
+      DialKit.createDialRoot({ position:'top-right', theme:'dark', defaultOpen: innerWidth > 800 });
+      DialKit.createDialKit('Brain in a jar', cfg, { id:'brain-jar-v1', persist:true }).subscribe(v => { P = v; wake(); });
+    }
+  } catch (e) { console.warn('Controls unavailable', e); }
+  // colours from the panel are sRGB; the shaders work in linear light
+  const lin = h => { h = String(h).replace('#', ''); if (h.length === 3) h = [...h].map(x => x + x).join(''); return [0, 2, 4].map(i => Math.pow(parseInt(h.substr(i, 2), 16)/255, 2.2)); };
+
+  /* ---- motion: only the jar moves when dragged; the brain and the camera stay put */
   const still = matchMedia('(prefers-reduced-motion: reduce)');
-  const ptr = { x:0, y:0, tx:0, ty:0 };
-  const orbit = { yaw:0, pitch:0, tyaw:0, tpitch:0 };
+  const tilt = { roll:0, pitch:0, troll:0, tpitch:0 };
+  const LIMIT = .55;
   let drag = null;
   cv.addEventListener('pointerdown', e => { if (e.button) return; cv.setPointerCapture(e.pointerId); drag = { id:e.pointerId, x:e.clientX, y:e.clientY }; });
   cv.addEventListener('pointermove', e => {
-    if (drag && drag.id === e.pointerId){
-      const k = 3.4/Math.min(innerWidth, innerHeight);
-      orbit.tyaw -= (e.clientX - drag.x)*k;
-      orbit.tpitch = Math.max(-1.1, Math.min(1.1, orbit.tpitch - (e.clientY - drag.y)*k));
-      drag.x = e.clientX; drag.y = e.clientY;
-    } else if (e.pointerType === 'mouse'){
-      ptr.tx = e.clientX/innerWidth*2 - 1; ptr.ty = e.clientY/innerHeight*2 - 1;
-    }
+    if (!drag || drag.id !== e.pointerId) return;
+    const k = 2.2/Math.min(innerWidth, innerHeight);
+    tilt.troll  = Math.max(-LIMIT, Math.min(LIMIT, tilt.troll - (e.clientX - drag.x)*k));
+    tilt.tpitch = Math.max(-LIMIT, Math.min(LIMIT, tilt.tpitch + (e.clientY - drag.y)*k));
+    drag.x = e.clientX; drag.y = e.clientY;
     wake();
   });
   const release = e => { if (drag && drag.id === e.pointerId) drag = null; };
   cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
-  cv.addEventListener('dblclick', () => { orbit.tyaw = Math.round(orbit.yaw/(2*Math.PI))*2*Math.PI; orbit.tpitch = 0; wake(); });
-  document.addEventListener('mouseleave', () => { ptr.tx = ptr.ty = 0; wake(); });
+  cv.addEventListener('dblclick', () => { tilt.troll = tilt.tpitch = 0; wake(); });
 
   const rotXY = (ax, ay) => {                      // rotate about x, then y (column-major mat3)
     const cx = Math.cos(ax), sx = Math.sin(ax), cy = Math.cos(ay), sy = Math.sin(ay);
     return [cy, 0, -sy,  sy*sx, cx, cy*sx,  sy*cx, -sx, cy*cx];
   };
   const transpose = m => [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]];
+  const mul = (A, B) => { const o = []; for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++){ let v = 0; for (let k = 0; k < 3; k++) v += A[k*3 + i]*B[j*3 + k]; o[j*3 + i] = v; } return o; };
+  const rotX = a => [1, 0, 0,  0, Math.cos(a), Math.sin(a),  0, -Math.sin(a), Math.cos(a)];
+  const rotZ = a => [Math.cos(a), Math.sin(a), 0,  -Math.sin(a), Math.cos(a), 0,  0, 0, 1];
+  const IDENT = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
-  let time = 0;
+  /* ---- the heartbeat: a phase that advances with the tempo, so changing the speed never jumps */
+  let time = 0, phase = 0;
+  const ripples = [99, 99, 99];                    // seconds since each of the last three beats
+  function beatShape(ph){
+    // two soft bumps (a beat and its echo); softness widens them until they melt into one swell
+    const w = .035 + .17*P.Beat.softness;
+    const bump = c => { let d = Math.abs(ph - c); d = Math.min(d, 1 - d); return Math.exp(-(d/w)*(d/w)); };
+    return Math.min(1, bump(.15) + P.Beat.secondBeat*bump(.15 + P.Beat.echoGap));
+  }
+  function advance(dt){
+    time += dt;
+    const before = phase % 1;
+    phase += dt*P.Beat.bpm/60;
+    const now = phase % 1;
+    for (let i = 0; i < 3; i++) ripples[i] += dt;
+    if ((before < .15 && now >= .15) || (now < before && now >= .15)){ ripples.pop(); ripples.unshift(0); }
+  }
+
   function draw(){
     if (!W) return;
     const t = time, D = 9;
     // fit the jar: it is ~2.2 tall and ~2.05 wide
     const view = Math.max(3.11, 2.75*H/W);
-    // the camera sits a little above the jar's middle
-    const cam = rotXY(-.085 - ptr.y*.06 + orbit.pitch, ptr.x*.14 + orbit.yaw);
+    // the camera is fixed, a little above the jar's middle
+    const cam = rotXY(-.085, 0);
     const camPos = [cam[6]*D, cam[7]*D + .015, cam[8]*D];
-    const envRot = transpose(rotXY(0, orbit.yaw));
-    // the brain hangs in the liquid: it bobs and sways very slightly
-    const brain = rotXY(Math.sin(t*.37)*.04 - ptr.y*.04, Math.sin(t*.23 + 1.3)*.06 + ptr.x*.06);
-    const brainPos = [0, -.03 + Math.sin(t*.5)*.012, 0];
-    // a heartbeat: a strong thump, a softer second one, then rest (about 52 beats a minute)
-    const ph = (t*.87) % 1, thump = (c, w) => Math.exp(-(((ph - c)/w)**2));
-    const beat = thump(.08, .045) + .55*thump(.24, .05);
-    const pulse = .9 + .45*beat;
+    const J = mul(rotZ(tilt.roll), rotX(tilt.pitch));
+    // the brain is fixed in place; it only floats up and down a hair
+    const brain = IDENT;
+    const brainPos = [0, -.03 + Math.sin(t*.5)*.008, 0];
+    const beat = beatShape(phase % 1);
+    const pulse = 1 + P.Beat.strength*beat;
+    const lights = [P.Jar.softboxLeft, P.Jar.windowRight, P.Jar.lampAbove, P.Jar.edgeLight];
 
     // 1: the brain
     gl.bindFramebuffer(gl.FRAMEBUFFER, msFbo);
@@ -641,9 +766,15 @@ void main(){
     gl.uniform3fv(u.uBrainPos, brainPos);
     gl.uniform3fv(u.uCamPos, camPos);
     gl.uniformMatrix3fv(u.uCamInv, false, transpose(cam));
-    gl.uniformMatrix3fv(u.uEnvRot, false, envRot);
+    gl.uniformMatrix3fv(u.uEnvRot, false, IDENT);
+    gl.uniform4fv(u.uLights, lights);
     gl.uniform2f(u.uProj, D/(.5*view*W/H), D/(.5*view));
     gl.uniform1f(u.uPulse, pulse); gl.uniform1f(u.uTime, t); gl.uniform1f(u.uScale, SCALE);
+    gl.uniform1f(u.uSwell, 1 + P.Beat.swell*beat);
+    gl.uniform3fv(u.uBody, lin(P.Brain.body)); gl.uniform3fv(u.uCore, lin(P.Brain.core));
+    gl.uniform1f(u.uGlow, P.Brain.glow); gl.uniform1f(u.uRimB, P.Brain.rimLight);
+    gl.uniform1f(u.uWet, P.Brain.wetness); gl.uniform1f(u.uSpec, P.Brain.highlights);
+    gl.uniform1f(u.uBeatPhase, phase - .15); gl.uniform1f(u.uBeatWave, P.Beat.lightWave);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tissue); gl.uniform1i(u.uTissue, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, normals); gl.uniform1i(u.uNormals, 1);
     gl.bindVertexArray(vao);
@@ -658,7 +789,7 @@ void main(){
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, specimen);
     gl.generateMipmap(gl.TEXTURE_2D);
 
-    // 3: the jar, the glow, and the final picture
+    // 3: the jar, the sea, the glow, and the final picture
     gl.useProgram(sceneProg.p);
     u = sceneProg.u;
     gl.uniform2f(u.uRes, W, H);
@@ -666,23 +797,35 @@ void main(){
     gl.uniform1f(u.uView, view);
     gl.uniform3fv(u.uCamPos, camPos);
     gl.uniformMatrix3fv(u.uCam, false, cam);
-    gl.uniformMatrix3fv(u.uEnvRot, false, envRot);
+    gl.uniformMatrix3fv(u.uEnvRot, false, IDENT);
+    gl.uniform4fv(u.uLights, lights);
+    gl.uniformMatrix3fv(u.uJar, false, J);
+    gl.uniformMatrix3fv(u.uJarInv, false, transpose(J));
     gl.uniform3fv(u.uBrainPos, brainPos);
     gl.uniform1f(u.uPulse, pulse); gl.uniform1f(u.uScale, SCALE);
     gl.uniform1i(u.uSpecimen, 0);
     gl.uniformMatrix3fv(u.uCamInv, false, transpose(cam));
     gl.uniform2f(u.uProjUV, D/(view*W/H), D/view);
+    gl.uniform1f(u.uSea, P.Sea.level);
+    gl.uniform3fv(u.uShallow, lin(P.Sea.surface)); gl.uniform3fv(u.uDeep, lin(P.Sea.depths));
+    gl.uniform1f(u.uMurk, P.Sea.murk); gl.uniform1f(u.uClarity, P.Sea.clarity);
+    gl.uniform1f(u.uShafts, P.Sea.lightShafts); gl.uniform1f(u.uMotes, P.Sea.particles);
+    gl.uniform1f(u.uSwellAmp, P.Sea.swell); gl.uniform1f(u.uWaterGlow, P.Sea.brainLightsWater);
+    gl.uniform3fv(u.uRipples, ripples);
+    gl.uniform1f(u.uRipple, P.Ripples.height); gl.uniform1f(u.uRippleSpeed, P.Ripples.speed);
+    gl.uniform1f(u.uGlassRefl, P.Jar.reflections); gl.uniform1f(u.uGlassTint, P.Jar.glassTint);
+    gl.uniform1f(u.uBloom, P.Brain.haloInWater); gl.uniform1f(u.uBrainBehind, P.Jar.roomThroughWater);
+    gl.uniform1f(u.uExposure, P.Grade.exposure); gl.uniform1f(u.uContrast, P.Grade.contrast);
+    gl.uniform1f(u.uSat, P.Grade.saturation); gl.uniform3fv(u.uShadowTint, lin(P.Grade.shadowTint));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  let raf = 0, last = 0;
   function frame(now){
     raf = 0;
     const dt = Math.min(.05, (now - last)/1000 || 0); last = now;
     const k = still.matches ? 1 : 1 - Math.exp(-dt*5);
-    if (!still.matches) time += dt;
-    ptr.x += (ptr.tx - ptr.x)*k; ptr.y += (ptr.ty - ptr.y)*k;
-    orbit.yaw += (orbit.tyaw - orbit.yaw)*k; orbit.pitch += (orbit.tpitch - orbit.pitch)*k;
+    if (!still.matches) advance(dt);
+    tilt.roll += (tilt.troll - tilt.roll)*k; tilt.pitch += (tilt.tpitch - tilt.pitch)*k;
     draw();
     if (!still.matches) wake();
   }
@@ -698,7 +841,7 @@ void main(){
   last = performance.now();
   wake();
 
-  window.__brain = { draw, orbit, set: (yaw, pitch, t) => { orbit.yaw = orbit.tyaw = yaw; orbit.pitch = orbit.tpitch = pitch; if (t != null) time = t; draw(); } };
+  window.__brain = { draw, tilt, params: () => P, set: (roll, pitch, t) => { tilt.roll = tilt.troll = roll; tilt.pitch = tilt.tpitch = pitch; if (t != null){ ripples.fill(99); advance(t); if (ripples[0] < 99) ripples[0] = ((phase % 1) - .15 + 1) % 1*60/P.Beat.bpm; } draw(); } };
 })().catch(e => { console.error(e); const n = document.getElementById('note'); n.textContent = 'Something went wrong drawing this piece.'; n.classList.add('on'); });
 </script>
 </body>
