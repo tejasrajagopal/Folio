@@ -1,5 +1,11 @@
-  /*@@WORKS_JS@@*/
-  const HIDDEN = {}, SIZES = {};
+  const WORKS = [
+    ["01","Ekaant Care — Stats"],["02","Ekaant Care — App"],["03","Ekaant Care — Mark"],["04","Ekaant Care — Campaign"],
+    ["05","Timelaps"],["06","Anduro"],["07","Avant — Identity"],["08","Avant — Illustration"],
+    ["09","River — Dashboard"],["10","River — Product"],["11","River — Data viz"],["12","Wayfind"],
+    ["13","Fintech — Payments"],["14","Realised"],["15","Rewards — Patches"],["16","Paw — Mark"],["17","Home services — Booking"]
+  ];
+  const HIDDEN = { "10": true };
+  const SIZES  = { "10": 1.89 };
   const MAX_DUMMIES = 30;
 
   // ---------- DialKit config (defaults = Tejas's tuned values) ----------
