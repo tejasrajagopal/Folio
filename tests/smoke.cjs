@@ -96,6 +96,13 @@ async function run(browser, base, name, opts){
   const back = await ev(() => ({ open: document.getElementById('projectView').classList.contains('open'), hash: location.hash, y: Math.round(scrollY) }));
   check(name, 'Esc closes the project and returns to the work', !back.open && back.hash === '' && Math.abs(back.y - yBefore) < 4, JSON.stringify(back));
 
+  // a project with its own gallery: every image is there and the first ones have loaded
+  await ev(() => { location.hash = '#project-river'; }); await page.waitForTimeout(2500);
+  const gal = await ev(() => { const im = [...document.querySelectorAll('#projectView .pv-g img')];
+    return { n: im.length, loaded: im.slice(0, 2).filter(i => i.complete && i.naturalWidth > 0).length, sources: document.querySelectorAll('#projectView source[type="image/jxl"]').length }; });
+  check(name, 'River opens with its 13-image gallery (JPEG XL with fallback)', gal.n === 13 && gal.sources === 13 && gal.loaded === 2, JSON.stringify(gal));
+  await page.keyboard.press('Escape'); await page.waitForTimeout(700);
+
   // theme switch (by hand only)
   await ev(() => document.getElementById('themeToggle').click()); await page.waitForTimeout(1200);
   check(name, 'theme switch turns dark on', await ev(() => document.documentElement.dataset.theme === 'dark'));

@@ -16,6 +16,7 @@
   .pv-t{position:relative;overflow:hidden;background:color-mix(in srgb,var(--ink) 8%,var(--bg));min-height:0}
   .pv-t img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
   .pv-wide{aspect-ratio:16/9} .pv-tall{aspect-ratio:3/4} .pv-half{aspect-ratio:479/311}
+  .pv-solo{width:calc(50% - 8.5px)}
   .pv-row.mix .pv-col .pv-half{aspect-ratio:auto;flex:1}       /* two stacked beside a tall one: together exactly its height */
   .pv-t{opacity:0;transform:translateY(16px);transition:opacity .6s var(--ease-out-expo),transform .6s var(--ease-out-expo)}
   .pv.open .pv-t{opacity:1;transform:none;transition-delay:calc(.08s + var(--i,0) * 50ms)}

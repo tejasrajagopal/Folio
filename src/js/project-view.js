@@ -16,10 +16,31 @@
     }
     return rows;
   }
+  // a project with a gallery (GALLERIES, from tools/gallery-images.py) shows those images: JPEG XL first, WebP for browsers
+  // that can't decode it, each in two sizes. Rows follow the images' own shapes: wide = full row, tall + two halves,
+  // tall + tall, or two halves side by side. A project without one falls back to its tiles from the work grid.
+  function pvGallery(name, slug, items){
+    let i = 0;
+    const tile = (it, cls) => { const base = `works/${slug}/${it.n}`, half = Math.round(it.w/2), k = i++;
+      const set = ext => `${base}-s.${ext} ${half}w, ${base}.${ext} ${it.w}w`;
+      const sizes = it.kind === 'wide' ? '(max-width:700px) 100vw, 68vw' : '(max-width:700px) 100vw, 34vw';
+      return `<div class="pv-t ${cls}" style="--i:${k}"><picture><source type="image/jxl" srcset="${set('jxl')}" sizes="${sizes}">` +
+        `<img src="${base}-s.webp" srcset="${set('webp')}" sizes="${sizes}" width="${it.w}" height="${it.h}" alt="${name} — ${k + 1} of ${items.length}" loading="${k > 1 ? 'lazy' : 'eager'}" decoding="async"></picture></div>`; };
+    let html = '';
+    for (let j = 0; j < items.length; ){
+      const a = items[j], b = items[j+1], c = items[j+2];
+      if (a.kind === 'wide'){ html += tile(a, 'pv-wide'); j += 1; }
+      else if (a.kind === 'tall' && b && b.kind === 'half' && c && c.kind === 'half'){ html += `<div class="pv-row mix">${tile(a, 'pv-tall')}<div class="pv-col">${tile(b, 'pv-half')}${tile(c, 'pv-half')}</div></div>`; j += 3; }
+      else if (a.kind === 'tall' && b && b.kind === 'tall'){ html += `<div class="pv-row">${tile(a, 'pv-tall')}${tile(b, 'pv-tall')}</div>`; j += 2; }
+      else if (a.kind === 'half' && b && b.kind === 'half'){ html += `<div class="pv-row">${tile(a, 'pv-half')}${tile(b, 'pv-half')}</div>`; j += 2; }
+      else { html += tile(a, a.kind === 'tall' ? 'pv-tall pv-solo' : 'pv-wide'); j += 1; }
+    }
+    return html;
+  }
   function pvRender(name, list){
-    const info = PROJECT_INFO[name] || PROJECT_INFO._default; let i = 0;
+    const info = PROJECT_INFO[name] || PROJECT_INFO._default, slug = pvSlug(name); let i = 0;
     const tile = (c, cls) => `<div class="pv-t ${cls}" style="--i:${i++}"><img src="works/${c.id}.webp" alt="${c.title}" loading="${i > 2 ? 'lazy' : 'eager'}" decoding="async"></div>`;
-    const rows = pvRows(list).map(r =>
+    const rows = GALLERIES[slug] ? pvGallery(name, slug, GALLERIES[slug]) : pvRows(list).map(r =>
       r.kind === 'wide' ? tile(r.imgs[0], 'pv-wide')
       : r.kind === 'mix' ? `<div class="pv-row mix">${tile(r.imgs[0], 'pv-tall')}<div class="pv-col">${tile(r.imgs[1], 'pv-half')}${tile(r.imgs[2], 'pv-half')}</div></div>`
       : r.kind === 'tall' ? `<div class="pv-row">${tile(r.imgs[0], 'pv-tall')}${tile(r.imgs[1], 'pv-tall')}</div>`
