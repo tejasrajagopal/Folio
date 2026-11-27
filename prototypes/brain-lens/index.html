@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#000000">
+<title>Brain under the lens — prototype</title>
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../vendor/styles.css">
+<style>
+  @font-face{font-family:"Geist Mono";src:url(../../fonts/GeistMono-Regular.woff2) format("woff2");font-weight:400;font-display:swap}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#000;overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #gl{opacity:0;transition:opacity 1.2s ease;touch-action:none}
+  #gl.on{opacity:1}
+  #hud{pointer-events:none}
+  @media (prefers-reduced-motion: reduce){#gl{transition:none}}
+  .note{position:fixed;inset:0;display:none;place-items:center;color:rgba(255,255,255,.6);font:300 13px/1.5 "Geist Mono",ui-monospace,Menlo,monospace;text-align:center;padding:24px}
+  .note.on{display:grid}
+  .credit{position:fixed;left:0;right:0;bottom:max(14px,env(safe-area-inset-bottom));text-align:center;font:400 11px/1.4 "Geist Mono",ui-monospace,Menlo,monospace;letter-spacing:.02em;color:rgba(255,255,255,.32);pointer-events:none}
+  .credit a{color:inherit;pointer-events:auto}
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="A dark metal brain turning slowly behind a round glass lens rimmed in orange light, circled by a swarm of glowing particles, with tracking boxes following points on it."></canvas>
+<canvas id="hud" aria-hidden="true"></canvas>
+<p class="note" id="note">This piece needs WebGL 2, which this browser doesn't offer.</p>
+<p class="credit">Brain model: <a href="https://sketchfab.com/3d-models/human-brain-7a27c17fd6c0488bb31ab093236a47fb" rel="noopener">Human Brain</a> by 3DRT STUDIOS, <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a></p>
+
+<!-- 1. the brain: dark, brushed metal under a white key light, a fill and a rim -->
+<script id="brain-vs" type="x-shader/x-vertex">#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNor;
+layout(location=2) in vec2 aUV;
+layout(location=3) in vec3 aTan;
+uniform mat3 uModel;
+uniform mat3 uCamInv;
+uniform vec3 uCamPos;
+uniform vec2 uProj;
+out vec3 vW, vN, vT;
+out vec2 vUV;
+const vec3 SC = vec3(1.14, .985, .96)*.62;
+void main(){
+  vec3 w = uModel*(aPos*SC);
+  vW = w; vUV = aUV;
+  vN = uModel*(aNor/SC); vT = uModel*(aTan*SC);
+  vec3 pc = uCamInv*(w - uCamPos);
+  float d = -pc.z;
+  gl_Position = vec4(pc.xy*uProj, (d - 9.)/1.6*d, d);
+}
+</script>
+<script id="brain-fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uTissue, uNormals;
+uniform vec3 uCamPos, uKeyDir, uAccent, uBase;
+uniform float uMetal, uRough, uKey, uFill, uAmbient, uRim, uTexMix, uBump;
+in vec3 vW, vN, vT;
+in vec2 vUV;
+out vec4 outColor;
+// a dim studio the metal mirrors: dark below, a soft band of light above, and a hint of the accent
+vec3 env(vec3 r){
+  float up = r.y*.5 + .5;
+  vec3 c = mix(vec3(.004), vec3(.09, .095, .1), smoothstep(.45, 1., up));
+  c += vec3(.5)*smoothstep(.06, .0, abs(r.y - .55))*smoothstep(.2, .9, r.z*.5 + .5);   // a long softbox
+  c += uAccent*.05*smoothstep(.2, -.6, r.y);
+  return c;
+}
+float ggx(float ndh, float a){ float a2 = a*a, d = ndh*ndh*(a2 - 1.) + 1.; return a2/(3.14159*d*d); }
+void main(){
+  vec3 ng = normalize(vN), t = normalize(vT - ng*dot(ng, vT));
+  vec3 bump = texture(uNormals, vUV).xyz*2. - 1.;
+  bump.xy *= uBump;
+  vec3 n = normalize(t*bump.x - cross(ng, t)*bump.y + ng*bump.z);
+  vec3 v = normalize(uCamPos - vW);
+  if (dot(ng, v) < 0.){ ng = -ng; n = -n; }
+  vec3 skin = pow(texture(uTissue, vUV).rgb, vec3(2.2));
+  float lum = dot(skin, vec3(.3, .5, .2));
+  vec3 albedo = mix(uBase, uBase*skin/max(lum, .05)*.6, uTexMix);
+  float cavity = mix(.35, 1., smoothstep(.08, .45, lum));            // the grooves sit in shadow
+  vec3 f0 = mix(vec3(.04), albedo, uMetal);
+  float a = max(uRough*uRough, .02);
+  float ndv = max(dot(n, v), 1e-3);
+  vec3 col = vec3(0.);
+  // key and fill
+  for (int i = 0; i < 2; i++){
+    vec3 l = i == 0 ? normalize(uKeyDir) : normalize(vec3(-uKeyDir.x, .2, .8));
+    float I = i == 0 ? uKey : uFill*.45;
+    vec3 h = normalize(l + v);
+    float ndl = max(dot(n, l), 0.), ndh = max(dot(n, h), 0.);
+    vec3 F = f0 + (1. - f0)*pow(1. - max(dot(h, v), 0.), 5.);
+    vec3 spec = F*ggx(ndh, a)*.25/max(ndl*ndv, .05)*ndl;
+    vec3 diff = (1. - F)*(1. - uMetal)*albedo/3.14159*ndl;
+    col += (diff + spec)*I*3.2;
+  }
+  // what the metal mirrors, and a little ambient
+  vec3 Fv = f0 + (1. - f0)*pow(1. - ndv, 5.);
+  col += env(reflect(-v, n))*Fv*(1. - uRough*.6)*2.;
+  col += albedo*uAmbient*.06*(1. - uMetal*.6);
+  col *= cavity;
+  // a thin accent rim where the surface turns away
+  col += uAccent*pow(1. - max(dot(ng, v), 0.), 4.)*uRim*.5;
+  outColor = vec4(col, 1.);
+}
+</script>
+
+<!-- 2. pixel sort: bright runs along a slanted direction are rearranged from dark to bright -->
+<script id="sort-fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uImg;
+uniform vec2 uRes, uDir;
+uniform float uAmount, uThreshold, uLength;
+out vec4 outColor;
+float luma(vec3 c){ return dot(c, vec3(.299, .587, .114)); }
+float h12(vec2 p){ return fract(52.9829189*fract(dot(p, vec2(.06711056, .00583715)))); }
+void main(){
+  vec2 uv = gl_FragCoord.xy/uRes;
+  vec4 base = texture(uImg, uv);
+  if (uAmount <= 0. || base.a <= 0.) { outColor = base; return; }
+  // each row across the direction gets its own threshold, so the streaks come out ragged
+  vec2 perp = vec2(-uDir.y, uDir.x);
+  float row = floor(dot(gl_FragCoord.xy, perp)/3.);
+  float th = clamp(uThreshold + (h12(vec2(row, 7.)) - .5)*.08, 0., 1.);
+  float b = luma(base.rgb);
+  if (b < th){ outColor = base; return; }
+  vec2 stepUv = uDir*(uLength*min(uRes.x, uRes.y)/24.)/uRes;
+  vec3 lo = base.rgb, hi = base.rgb; float loL = b, hiL = b;
+  float fwd = 0., back = 0.;
+  for (int k = 1; k <= 12; k++){
+    vec4 s = texture(uImg, uv + stepUv*float(k)); float l = luma(s.rgb);
+    if (l < th || s.a <= 0.) break;
+    fwd += 1.; if (l > hiL){ hiL = l; hi = s.rgb; } if (l < loL){ loL = l; lo = s.rgb; }
+  }
+  for (int k = 1; k <= 12; k++){
+    vec4 s = texture(uImg, uv - stepUv*float(k)); float l = luma(s.rgb);
+    if (l < th || s.a <= 0.) break;
+    back += 1.; if (l > hiL){ hiL = l; hi = s.rgb; } if (l < loL){ loL = l; lo = s.rgb; }
+  }
+  float t = back/max(fwd + back, 1.);
+  vec3 sorted = mix(lo, hi, t);
+  outColor = vec4(mix(base.rgb, sorted, uAmount*step(1., fwd + back)), base.a);
+}
+</script>
+
+<!-- 3. the lens: a round pane of glass that bends the brain behind it, splits its colours at the edge,
+        and glows with the accent where the glass is thinnest -->
+<script id="lens-fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uImg;
+uniform vec2 uRes, uCenter;
+uniform float uRadius, uBend, uSplit, uRimGlow, uSoft, uZoom;
+uniform vec3 uAccent;
+out vec4 outColor;
+void main(){
+  vec2 uv = gl_FragCoord.xy/uRes;
+  vec2 st = (gl_FragCoord.xy - uCenter*uRes)/uRes.y;      // height-relative, round on any screen
+  float r = length(st)/uRadius;
+  float sd = (length(st) - uRadius)/uRadius;              // signed distance to the rim (in radii)
+  float inside = smoothstep(uSoft, 0., sd);
+  if (inside <= 0.){ outColor = vec4(0.); return; }
+  // like a thick glass disc: barely any bend in the middle, more and more toward the rim
+  float rr = clamp(r, 0., .999);
+  float bulge = 1./sqrt(1. - rr*rr) - 1.;
+  vec2 dir = st/max(length(st), 1e-5);
+  vec3 col;
+  for (int c = 0; c < 3; c++){
+    float k = uBend*(1. + (float(c) - 1.)*uSplit);
+    vec2 off = -dir*bulge*k*.04/vec2(uRes.x/uRes.y, 1.);
+    vec2 suv = (uv - uCenter)/uZoom + uCenter + off;
+    col[c] = texture(uImg, suv)[c];
+  }
+  // the rim: light caught in the edge of the glass
+  float d = max(-sd, 0.);
+  float edge = exp(-d*38.)*1.6 + exp(-d*9.)*.18;                // bright at the rim, gone by a third of the way in
+  col += uAccent*edge*uRimGlow*.6*inside;
+  col += vec3(1.)*smoothstep(.02, .0, abs(sd + .012))*.06;   // a fine bright line at the very edge
+  outColor = vec4(col, inside);
+}
+</script>
+
+<!-- 4. particles: glowing beads with a lit core and a soft halo, in the accent colour -->
+<script id="part-vs" type="x-shader/x-vertex">#version 300 es
+layout(location=0) in vec4 aP;     // x, y (screen uv), size, brightness
+uniform vec2 uRes;
+uniform float uSize;
+out float vB;
+void main(){
+  vB = aP.w;
+  gl_Position = vec4(aP.xy*2. - 1., 0., 1.);
+  gl_PointSize = max(2., aP.z*uSize*uRes.y/900.);
+}
+</script>
+<script id="part-fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform vec3 uAccent;
+uniform float uGlow;
+in float vB;
+out vec4 outColor;
+void main(){
+  vec2 pc = gl_PointCoord*2. - 1.;
+  float r2 = dot(pc, pc);
+  if (r2 > 1.) discard;
+  float r = sqrt(r2);
+  float core = 1. - smoothstep(.36, .42, r);
+  vec2 nc = pc/.42;
+  vec3 nrm = vec3(nc, sqrt(max(1. - dot(nc, nc), 0.)));
+  vec3 L = normalize(vec3(-.461, .659, .593));
+  float diff = max(dot(nrm, L), 0.)*.8 + .2;
+  float spec = pow(max(dot(reflect(-L, nrm), vec3(0., 0., 1.)), 0.), 24.);
+  vec3 bead = uAccent*diff + vec3(1., .94, .84)*spec*.9 + uAccent*(1. - nrm.z)*.28;
+  float halo = (1. - smoothstep(.4, 1., r))*.35*uGlow;
+  vec3 col = bead*core + uAccent*halo;
+  outColor = vec4(col*vB, max(core, halo*.6)*vB);
+}
+</script>
+
+<!-- 5. the finish: tinted bloom, ordered dither, vignette -->
+<script id="post-fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uImg;
+uniform vec2 uRes;
+uniform float uTime, uBloom, uDither, uLevels, uVignette, uVigRadius, uExposure, uGrain;
+uniform vec3 uBloomTint;
+out vec4 outColor;
+float bayer(vec2 p){                       // 8 x 8 ordered threshold, 0..1
+  ivec2 q = ivec2(mod(p, 8.));
+  int x = q.x, y = q.y, v = 0;
+  for (int b = 0; b < 3; b++){
+    int bx = (x >> (2 - b)) & 1, by = (y >> (2 - b)) & 1;
+    v = v*4 + ((bx ^ by) << 1 | by) ;
+  }
+  return (float(v) + .5)/64.;
+}
+float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x*p.y); }
+vec4 soft(vec2 uv, float lod){
+  vec2 px = exp2(lod)/uRes*.75;
+  return (textureLod(uImg, uv + px*vec2(1, 1), lod) + textureLod(uImg, uv + px*vec2(-1, 1), lod)
+        + textureLod(uImg, uv + px*vec2(1, -1), lod) + textureLod(uImg, uv + px*vec2(-1, -1), lod))*.25;
+}
+void main(){
+  vec2 uv = gl_FragCoord.xy/uRes;
+  vec3 col = texture(uImg, uv).rgb;
+  float L = log2(uRes.y/900.);
+  vec3 b = soft(uv, L + 2.).rgb*.35 + soft(uv, L + 3.).rgb*.3 + soft(uv, L + 4.).rgb*.22 + soft(uv, L + 5.2).rgb*.13;
+  col += b*uBloomTint*uBloom;
+  col *= uExposure;
+  col = col/(1. + col*.85);                                    // gentle highlight roll-off
+  col = pow(max(col, 0.), vec3(1./2.2));
+  // ordered dither: snaps tones to a few levels with a fine cross-hatch, mixed over the image
+  float lv = max(uLevels, 1.);
+  vec3 q = floor(col*lv + bayer(gl_FragCoord.xy)) / lv;
+  col = mix(col, q, uDither);
+  // vignette to black
+  vec2 c = (uv - .5)*vec2(uRes.x/uRes.y, 1.);
+  float fall = smoothstep(uVigRadius*.5, uVigRadius*.5 + .55, length(c*vec2(.5, 1.)*1.4));
+  col *= 1. - fall*uVignette;
+  col += (hash(gl_FragCoord.xy + fract(uTime)*61.) - .5)*(1./255. + uGrain*.03);
+  outColor = vec4(col, 1.);
+}
+</script>
+
+<script src="../../vendor/browser.global.js"></script>
+<script>
+(async () => {
+  const cv = document.getElementById('gl'), hud = document.getElementById('hud'), note = document.getElementById('note');
+  const fail = msg => { if (msg) note.textContent = msg; note.classList.add('on'); };
+  const gl = cv.getContext('webgl2', { antialias:false, alpha:false, powerPreference:'high-performance' });
+  if (!gl) return fail();
+  const ctx = hud.getContext('2d');
+
+  /* ---- programs */
+  const src = id => document.getElementById(id).textContent.trim();
+  function program(vs, fs){
+    const p = gl.createProgram();
+    for (const [type, text] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]){
+      const s = gl.createShader(type); gl.shaderSource(s, text); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      gl.attachShader(p, s);
+    }
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const u = {};
+    for (let i = 0, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); i < n; i++){ const name = gl.getActiveUniform(p, i).name; u[name] = gl.getUniformLocation(p, name); }
+    return { p, u };
+  }
+  const FULL = '#version 300 es\nvoid main(){ vec2 p = vec2(gl_VertexID == 1 ? 3. : -1., gl_VertexID == 2 ? 3. : -1.); gl_Position = vec4(p, 0., 1.); }';
+  const brainProg = program(src('brain-vs'), src('brain-fs'));
+  const sortProg = program(FULL, src('sort-fs'));
+  const lensProg = program(FULL, src('lens-fs'));
+  const partProg = program(src('part-vs'), src('part-fs'));
+  const postProg = program(FULL, src('post-fs'));
+  const emptyVao = gl.createVertexArray();
+
+  /* ---- the model, shared with the jar prototype */
+  let verts, tris, tissueImg, normalImg;
+  try {
+    const bin = async path => { const r = await fetch(path); if (!r.ok) throw new Error(path); return r.arrayBuffer(); };
+    const img = async path => { const i = new Image(); i.src = path; await i.decode(); return i; };
+    [verts, tris, tissueImg, normalImg] = await Promise.all([bin('../brain/assets/anatomy.bin'), bin('../brain/assets/triangles.bin'), img('../brain/assets/tissue.webp'), img('../brain/assets/normals.webp')]);
+  } catch (e) {
+    return fail('The brain model could not be loaded. Open this page through a web server rather than straight from disk.');
+  }
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+  [[0, 3, 0], [1, 3, 12], [2, 2, 24], [3, 3, 32]].forEach(([loc, n, off]) => { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 48, off); });
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, tris, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  const triCount = tris.byteLength/2;
+  const V = new Float32Array(verts);                // kept for the tracking readout
+  function imageTexture(image){
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    return t;
+  }
+  const tissue = imageTexture(tissueImg), normals = imageTexture(normalImg);
+
+  /* ---- particles: positions live on the CPU, uploaded each frame */
+  const MAXP = 1024;
+  const pBuf = new Float32Array(MAXP*4);
+  const partVao = gl.createVertexArray(); gl.bindVertexArray(partVao);
+  const partVbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, partVbo); gl.bufferData(gl.ARRAY_BUFFER, pBuf.byteLength, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 16, 0);
+  gl.bindVertexArray(null);
+
+  /* ---- render targets */
+  const hdr = !!gl.getExtension('EXT_color_buffer_float') || !!gl.getExtension('EXT_color_buffer_half_float');
+  const FORMAT = hdr ? gl.RGBA16F : gl.RGBA8, TYPE = hdr ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+  const samples = Math.min(4, gl.getParameter(gl.MAX_SAMPLES));
+  const msFbo = gl.createFramebuffer(), msColor = gl.createRenderbuffer(), msDepth = gl.createRenderbuffer();
+  function tex(mips){
+    const t = gl.createTexture(), f = gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mips ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return { t, f };
+  }
+  const brainT = tex(false), sortT = tex(false), compT = tex(true);
+  function allocate(w, h){
+    gl.bindRenderbuffer(gl.RENDERBUFFER, msColor); gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, FORMAT, w, h);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, msDepth); gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.DEPTH_COMPONENT16, w, h);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, msFbo);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msColor);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, msDepth);
+    for (const T of [brainT, sortT, compT]){
+      gl.bindTexture(gl.TEXTURE_2D, T.t);
+      gl.texImage2D(gl.TEXTURE_2D, 0, FORMAT, w, h, 0, gl.RGBA, TYPE, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, T.f);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, T.t, 0);
+    }
+  }
+
+  /* ---- controls (DialKit) */
+  const cfg = {
+    Brain: {
+      spin:[.12, -1, 1, .01],            // turns a second
+      tilt:[.3, -1.2, 1.2, .01],
+      size:[1.25, .4, 1.8, .01],
+      base:"#8c8f93",
+      metalness:[.6, 0, 1, .01],
+      roughness:[.5, .05, 1, .01],
+      texture:[.2, 0, 1, .01],
+      bumps:[1, 0, 3, .01],
+    },
+    Lights: {
+      key:[1, 0, 4, .01],
+      fill:[.99, 0, 4, .01],
+      ambient:[1, 0, 4, .01],
+      rim:[.6, 0, 3, .01],
+      followMouse:[.24, 0, 1, .01],
+    },
+    Lens: {
+      radius:[.29, .1, .6, .005],
+      bend:[.5, 0, 3, .01],
+      colourSplit:[.5, 0, 2, .01],
+      rimGlow:[1, 0, 4, .01],
+      zoom:[1, .6, 2, .01],
+    },
+    Particles: {
+      count:[512, 0, 1024, 1],
+      spread:[.35, 0, 1, .01],           // radius of the disc they gather into
+      size:[1, .2, 4, .01],
+      glow:[1, 0, 3, .01],
+      drift:[.2, 0, 1, .01],
+      mousePush:[1, 0, 3, .01],
+    },
+    PixelSort: {
+      amount:[.4, 0, 1, .01],
+      threshold:[.5, 0, 1, .01],
+      length:[.4, 0, 1, .01],
+      angle:[33, 0, 360, 1],
+    },
+    Tracking: {
+      show:true,
+      blobs:[15, 0, 15, 1],
+      links:true,
+      labels:true,
+      opacity:[.85, 0, 1, .01],
+    },
+    Finish: {
+      accent:"#f36900",
+      bloom:[.5, 0, 2, .01],
+      bloomTint:"#ff894d",
+      dither:[.5, 0, 1, .01],
+      levels:[6, 2, 16, 1],
+      vignette:[1, 0, 1, .01],
+      vignetteRadius:[.36, 0, 1, .01],
+      exposure:[1, .2, 3, .01],
+      grain:[.3, 0, 2, .01],
+    },
+  };
+  const cfgDefaults = c => { const o = {}; for (const [k, v] of Object.entries(c)){ o[k] = Array.isArray(v) ? v[0] : (v && typeof v === 'object') ? (v.type === 'select' ? v.default : cfgDefaults(v)) : v; } return o; };
+  let P = cfgDefaults(cfg);
+  let raf = 0, last = 0;
+  try {
+    if (window.DialKit){
+      DialKit.createDialRoot({ position:'top-right', theme:'dark', defaultOpen: innerWidth > 800 });
+      DialKit.createDialKit('Brain under the lens', cfg, { id:'brain-lens-v1', persist:true }).subscribe(v => { P = v; wake(); });
+    }
+  } catch (e) { console.warn('Controls unavailable', e); }
+  const lin = h => { h = String(h).replace('#', ''); if (h.length === 3) h = [...h].map(x => x + x).join(''); return [0, 2, 4].map(i => Math.pow(parseInt(h.substr(i, 2), 16)/255, 2.2)); };
+
+  /* ---- sizing */
+  let W = 0, H = 0, CW = 0, CH = 0, DPR = 1;
+  function resize(){
+    CW = cv.clientWidth; CH = cv.clientHeight;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    DPR = Math.min(DPR, Math.sqrt(2.6e6/Math.max(1, CW*CH)));
+    const w = Math.max(1, Math.round(CW*DPR)), h = Math.max(1, Math.round(CH*DPR));
+    if (w !== W || h !== H){ W = cv.width = w; H = cv.height = h; allocate(W, H); }
+    hud.width = Math.round(CW*Math.min(devicePixelRatio || 1, 2)); hud.height = Math.round(CH*Math.min(devicePixelRatio || 1, 2));
+    draw();
+  }
+
+  /* ---- motion */
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  const mouse = { x:.5, y:.5, tx:.5, ty:.5, on:0 };
+  addEventListener('pointermove', e => { mouse.tx = e.clientX/innerWidth; mouse.ty = 1 - e.clientY/innerHeight; mouse.on = 1; wake(); });
+  document.addEventListener('mouseleave', () => { mouse.on = 0; });
+
+  const mul = (A, B) => { const o = []; for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++){ let v = 0; for (let k = 0; k < 3; k++) v += A[k*3 + i]*B[j*3 + k]; o[j*3 + i] = v; } return o; };
+  const rotX = a => [1, 0, 0,  0, Math.cos(a), Math.sin(a),  0, -Math.sin(a), Math.cos(a)];
+  const rotY = a => [Math.cos(a), 0, -Math.sin(a),  0, 1, 0,  Math.sin(a), 0, Math.cos(a)];
+  const transpose = m => [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]];
+  const apply = (m, v) => [m[0]*v[0] + m[3]*v[1] + m[6]*v[2], m[1]*v[0] + m[4]*v[1] + m[7]*v[2], m[2]*v[0] + m[5]*v[1] + m[8]*v[2]];
+
+  // particles: each has a home in a golden-angle disc, and springs toward it while drifting
+  const parts = [];
+  for (let i = 0; i < MAXP; i++) parts.push({ x:.5 + (Math.random() - .5)*.6, y:.5 + (Math.random() - .5)*.6, vx:0, vy:0, ph:Math.random()*6.283, s:.6 + Math.random()*.8, b:.55 + Math.random()*.45 });
+  function stepParticles(dt, t){
+    const n = Math.min(MAXP, Math.round(P.Particles.count)), aspect = (W && H) ? W/H : innerWidth/Math.max(innerHeight, 1);
+    const R = .05 + .75*P.Particles.spread;
+    for (let i = 0; i < n; i++){
+      const q = parts[i];
+      const rad = Math.sqrt((i + .5)/n)*R*.5, ang = i*2.39996323 + t*.05;
+      let hx = .5 + Math.cos(ang)*rad/aspect, hy = .5 + Math.sin(ang)*rad;
+      hx += Math.sin(t*1.11 + q.ph*1.3)*.025*P.Particles.drift/aspect;
+      hy += Math.sin(t*1.37 + q.ph*1.618 + 1.7)*.025*P.Particles.drift;
+      let ax = (hx - q.x)*18 - q.vx*5.5, ay = (hy - q.y)*18 - q.vy*5.5;
+      if (mouse.on){
+        const dx = (q.x - mouse.x)*aspect, dy = q.y - mouse.y, d2 = dx*dx + dy*dy + 1e-4;
+        const f = P.Particles.mousePush*.0035/d2*Math.exp(-d2*30);
+        ax += dx*f*60/aspect; ay += dy*f*60;
+      }
+      q.vx += ax*dt; q.vy += ay*dt; q.x += q.vx*dt; q.y += q.vy*dt;
+      pBuf.set([q.x, q.y, 6*q.s, q.b], i*4);
+    }
+    return n;
+  }
+
+  // the tracking readout follows points on the brain's surface and a few in the swarm
+  const TRACK = [];
+  { const n = V.length/12; for (let i = 0; i < 15; i++) TRACK.push(Math.floor(((i*0.6180339887) % 1)*n)); }
+  const boxes = TRACK.map(() => ({ x:0, y:0, s:0, a:0 }));
+
+  let time = 0, model = rotX(-Math.PI/2), camPos = [0, 0, 9], view = 3.1;
+  function draw(){
+    if (!W) return;
+    const t = time, D = 9;
+    view = Math.max(3.1, 2.6*H/W)/P.Brain.size;
+    const cam = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    camPos = [0, 0, D];
+    // stand the brain upright (its crown is +z in the file), spin it about the vertical, tilt it toward us
+    model = mul(rotX(P.Brain.tilt), mul(rotY(t*P.Brain.spin), rotX(-Math.PI/2)));
+    const accent = lin(P.Finish.accent);
+    const key = [.55 - .5 + (mouse.x - .5)*P.Lights.followMouse*2, .23 + .2 + (mouse.y - .5)*P.Lights.followMouse*2, .75];
+
+    // 1: the brain
+    gl.bindFramebuffer(gl.FRAMEBUFFER, msFbo); gl.viewport(0, 0, W, H);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+    gl.useProgram(brainProg.p);
+    let u = brainProg.u;
+    gl.uniformMatrix3fv(u.uModel, false, model);
+    gl.uniformMatrix3fv(u.uCamInv, false, transpose(cam));
+    gl.uniform3fv(u.uCamPos, camPos);
+    gl.uniform2f(u.uProj, D/(.5*view*W/H), D/(.5*view));
+    gl.uniform3fv(u.uKeyDir, key); gl.uniform3fv(u.uAccent, accent); gl.uniform3fv(u.uBase, lin(P.Brain.base));
+    gl.uniform1f(u.uMetal, P.Brain.metalness); gl.uniform1f(u.uRough, P.Brain.roughness);
+    gl.uniform1f(u.uKey, P.Lights.key); gl.uniform1f(u.uFill, P.Lights.fill); gl.uniform1f(u.uAmbient, P.Lights.ambient);
+    gl.uniform1f(u.uRim, P.Lights.rim); gl.uniform1f(u.uTexMix, P.Brain.texture); gl.uniform1f(u.uBump, P.Brain.bumps);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tissue); gl.uniform1i(u.uTissue, 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, normals); gl.uniform1i(u.uNormals, 1);
+    gl.bindVertexArray(vao); gl.drawElements(gl.TRIANGLES, triCount, gl.UNSIGNED_SHORT, 0);
+    gl.disable(gl.DEPTH_TEST);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, msFbo); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, brainT.f);
+    gl.blitFramebuffer(0, 0, W, H, 0, 0, W, H, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+
+    // 2: pixel sort
+    gl.bindFramebuffer(gl.FRAMEBUFFER, sortT.f); gl.viewport(0, 0, W, H);
+    gl.useProgram(sortProg.p); u = sortProg.u;
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, brainT.t); gl.uniform1i(u.uImg, 0);
+    const a = P.PixelSort.angle*Math.PI/180;
+    gl.uniform2f(u.uRes, W, H); gl.uniform2f(u.uDir, Math.cos(a), Math.sin(a));
+    gl.uniform1f(u.uAmount, P.PixelSort.amount); gl.uniform1f(u.uThreshold, P.PixelSort.threshold*.6); gl.uniform1f(u.uLength, P.PixelSort.length*.6);
+    gl.bindVertexArray(emptyVao); gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    // 3: the lens over black, then the particles on top
+    gl.bindFramebuffer(gl.FRAMEBUFFER, compT.f); gl.viewport(0, 0, W, H);
+    gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(lensProg.p); u = lensProg.u;
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sortT.t); gl.uniform1i(u.uImg, 0);
+    gl.uniform2f(u.uRes, W, H); gl.uniform2f(u.uCenter, .5, .5);
+    gl.uniform1f(u.uRadius, P.Lens.radius); gl.uniform1f(u.uBend, P.Lens.bend); gl.uniform1f(u.uSplit, P.Lens.colourSplit*.4);
+    gl.uniform1f(u.uRimGlow, P.Lens.rimGlow); gl.uniform1f(u.uSoft, .004/P.Lens.radius); gl.uniform1f(u.uZoom, P.Lens.zoom);
+    gl.uniform3fv(u.uAccent, accent);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const n = stepped;
+    if (n > 0){
+      gl.useProgram(partProg.p); u = partProg.u;
+      gl.uniform2f(u.uRes, W, H); gl.uniform1f(u.uSize, P.Particles.size); gl.uniform1f(u.uGlow, P.Particles.glow);
+      gl.uniform3fv(u.uAccent, accent);
+      gl.bindVertexArray(partVao); gl.bindBuffer(gl.ARRAY_BUFFER, partVbo); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pBuf.subarray(0, n*4));
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.drawArrays(gl.POINTS, 0, n);
+    }
+    gl.disable(gl.BLEND);
+    gl.bindTexture(gl.TEXTURE_2D, compT.t); gl.generateMipmap(gl.TEXTURE_2D);
+
+    // 4: the finish, to the screen
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+    gl.useProgram(postProg.p); u = postProg.u;
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, compT.t); gl.uniform1i(u.uImg, 0);
+    gl.uniform2f(u.uRes, W, H); gl.uniform1f(u.uTime, t);
+    gl.uniform1f(u.uBloom, P.Finish.bloom); gl.uniform3fv(u.uBloomTint, lin(P.Finish.bloomTint));
+    gl.uniform1f(u.uDither, P.Finish.dither); gl.uniform1f(u.uLevels, P.Finish.levels);
+    gl.uniform1f(u.uVignette, P.Finish.vignette); gl.uniform1f(u.uVigRadius, P.Finish.vignetteRadius);
+    gl.uniform1f(u.uExposure, P.Finish.exposure); gl.uniform1f(u.uGrain, P.Finish.grain);
+    gl.bindVertexArray(emptyVao); gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    drawHud(t);
+  }
+
+  /* ---- the tracking readout, drawn in 2D over the picture */
+  function project(p){
+    const d = 9 - p[2];
+    const x = p[0]*9/d/(.5*view*W/H), y = p[1]*9/d/(.5*view);
+    return [x*.5 + .5, y*.5 + .5];
+  }
+  // where the lens bends a point: invert the disc's bulge approximately, so boxes sit on what you see
+  function throughLens(u){
+    const aspect = CW/CH, sx = (u[0] - .5)*aspect, sy = u[1] - .5;
+    const r = Math.hypot(sx, sy)/P.Lens.radius;
+    if (r >= 1) return null;
+    return [(u[0] - .5)*P.Lens.zoom + .5, (u[1] - .5)*P.Lens.zoom + .5];
+  }
+  function drawHud(t){
+    const k = hud.width/CW;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, hud.width, hud.height);
+    if (!P.Tracking.show) return;
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    const n = Math.round(P.Tracking.blobs), acc = P.Finish.accent;
+    const pts = [];
+    for (let i = 0; i < n; i++){
+      const vi = TRACK[i]*12;
+      const p = apply(model, [V[vi]*1.14*.62, V[vi + 1]*.985*.62, V[vi + 2]*.96*.62]);
+      const nn = apply(model, [V[vi + 3], V[vi + 4], V[vi + 5]]);
+      const facing = nn[2] > .15;
+      let s = project(p); s = throughLens(s);
+      const B = boxes[i];
+      const want = facing && s ? 1 : 0;
+      B.a += (want - B.a)*.12;
+      if (s){ B.x = s[0]*CW; B.y = (1 - s[1])*CH; }
+      B.s = 18 + 34*(.5 + .5*Math.sin(t*.7 + i*1.7));
+      if (B.a > .02) pts.push(B);
+    }
+    ctx.lineWidth = 1;
+    ctx.font = '10px "Geist Mono", ui-monospace, Menlo, monospace';
+    ctx.textBaseline = 'bottom';
+    if (P.Tracking.links && pts.length > 1){
+      ctx.strokeStyle = `rgba(255,255,255,${.28*P.Tracking.opacity})`;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      pts.forEach((b, i) => { if (i) ctx.lineTo(b.x, b.y); else ctx.moveTo(b.x, b.y); });
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    pts.forEach((b, i) => {
+      const o = b.a*P.Tracking.opacity, h = b.s/2;
+      ctx.strokeStyle = i % 4 === 0 ? acc : `rgba(255,255,255,${o})`;
+      ctx.globalAlpha = i % 4 === 0 ? o : 1;
+      ctx.strokeRect(Math.round(b.x - h) + .5, Math.round(b.y - h) + .5, Math.round(b.s), Math.round(b.s));
+      ctx.globalAlpha = 1;
+      if (P.Tracking.labels){
+        ctx.fillStyle = `rgba(255,255,255,${o*.85})`;
+        const cx = Math.round(b.x/CW*99), cy = Math.round(b.y/CH*99);
+        ctx.fillText(String(cx).padStart(2, '0') + ',' + String(cy).padStart(2, '0'), Math.round(b.x - h), Math.round(b.y - h) - 3);
+      }
+    });
+  }
+
+  let stepped = 0;
+  function frame(now){
+    raf = 0;
+    const dt = Math.min(.05, (now - last)/1000 || 0); last = now;
+    if (!still.matches) time += dt;
+    const k = 1 - Math.exp(-dt*6);
+    mouse.x += (mouse.tx - mouse.x)*k; mouse.y += (mouse.ty - mouse.y)*k;
+    stepped = stepParticles(still.matches ? 0 : dt, time);
+    draw();
+    if (!still.matches) wake();
+  }
+  function wake(){ if (!raf && !document.hidden) raf = requestAnimationFrame(frame); }
+  document.addEventListener('visibilitychange', () => { last = performance.now(); wake(); });
+  still.addEventListener('change', () => { last = performance.now(); wake(); });
+  cv.addEventListener('webglcontextlost', e => e.preventDefault());
+  cv.addEventListener('webglcontextrestored', () => location.reload());
+
+  // settle the swarm into place before the first frame
+  for (let i = 0; i < 90; i++) stepParticles(1/60, 0);
+  stepped = Math.min(MAXP, Math.round(P.Particles.count));
+  new ResizeObserver(resize).observe(cv);
+  resize();
+  cv.classList.add('on');
+  last = performance.now();
+  wake();
+  window.__lens = { draw, params: () => P, set: t => { time = t; draw(); } };
+})().catch(e => { console.error(e); const n = document.getElementById('note'); n.textContent = 'Something went wrong drawing this piece.'; n.classList.add('on'); });
+</script>
+</body>
+</html>
