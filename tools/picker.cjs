@@ -11,7 +11,7 @@ const MODES = [
 // [key, label, min, max, step, default] — defaults mirror src/js/band.js
 const GROUPS = [
   ['Pacing', [
-    ['flowSpeed', 'Drift speed', 0, 0.6, 0.01, 0.12],
+    ['flowSpeed', 'Drift speed', 0, 0.6, 0.01, 0.18],
     ['flowScroll', 'Drift from scroll', 0, 4, 0.05, 1],
     ['settle', 'Glide after stop', 0.05, 2, 0.05, 0.6],
     ['rippleSpeed', 'Bar bob speed', 0, 2, 0.01, 0.5],
@@ -19,20 +19,20 @@ const GROUPS = [
     ['travelScroll', 'Wave roll', 0, 3, 0.05, 0.5],
   ]],
   ['Motion', [
-    ['ripple', 'Bar bob amount', 0, 0.08, 0.001, 0.025],
-    ['flowRings', 'Colour layers', 0.5, 4, 0.05, 1.4],
-    ['halfPulse', 'Dot swell', 0, 0.6, 0.01, 0.15],
-    ['halfPulseSpeed', 'Dot swell speed', 0, 3, 0.05, 1],
+    ['ripple', 'Bar bob amount', 0, 0.08, 0.001, 0.043],
+    ['flowRings', 'Colour layers', 0.5, 4, 0.05, 2.8],
+    ['halfPulse', 'Dot swell', 0, 0.6, 0.01, 0.57],
+    ['halfPulseSpeed', 'Dot swell speed', 0, 3, 0.05, 0.95],
   ]],
   ['Dots', [
-    ['halfPitch', 'Dot size', 4, 24, 0.5, 9],
+    ['halfPitch', 'Dot size', 4, 24, 0.5, 6.5],
     ['fadeTop', 'Top dissolve', 0.05, 0.6, 0.01, 0.32],
-    ['fadeBottom', 'Bottom dissolve', 0.05, 0.6, 0.01, 0.22],
+    ['fadeBottom', 'Bottom dissolve', 0.05, 0.6, 0.01, 0.34],
   ]],
   ['Shape (same on desktop + phone)', [
-    ['bars', 'Bars across', 8, 120, 1, 44],
+    ['bars', 'Bars across', 8, 120, 1, 58],
     ['curveW', 'Curve height', 0, 0.4, 0.005, 0.175],
-    ['thickW', 'Thickness', 0.15, 0.9, 0.01, 0.49],
+    ['thickW', 'Thickness', 0.15, 0.9, 0.01, 0.29],
     ['tilt', 'Bar tilt', -30, 30, 0.5, 8],
     ['wave', 'Wave', 0, 0.15, 0.005, 0.055],
   ]],

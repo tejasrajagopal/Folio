@@ -1813,19 +1813,19 @@
     const cv = document.getElementById('bandCv');
     const gl = cv && cv.getContext('webgl', { antialias:false, premultipliedAlpha:true, alpha:true });
     if (!gl) return;
-    const B = { thickness:.78, wave:.055, waves:1, lobes:.015, fadeTop:.32, fadeBottom:.22, blur:120, grain:.43,   // blur + grain: the Figma layer blur (120) and mono noise (white, 43%)
+    const B = { thickness:.78, wave:.055, waves:1, lobes:.015, fadeTop:.32, fadeBottom:.34, blur:120, grain:.43,   // blur + grain: the Figma layer blur (120) and mono noise (white, 43%)
       pitch:6, dotSize:1.6, density:.62, dotOpacity:.85, tilt:8,
       // shape, as shares of the screen WIDTH so desktop and phone get the same silhouette: bars across, curve height, thickness
-      bars:44, curveW:.175, thickW:.49,
+      bars:58, curveW:.175, thickW:.29,
       // halftone (mode 5): dot spacing in px, and a slow swell that travels through the dots at the dissolving edges
-      halfPitch:9, halfPulse:.15, halfPulseSpeed:1,
-      ripple:.025, rippleSpeed:.5, rippleScroll:1.5, flowRings:1.4, flowSpeed:.12, flowScroll:1, travelScroll:.5, settle:.6,
+      halfPitch:6.5, halfPulse:.57, halfPulseSpeed:.95,
+      ripple:.043, rippleSpeed:.5, rippleScroll:1.5, flowRings:2.8, flowSpeed:.18, flowScroll:1, travelScroll:.5, settle:.6,
       stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'],
       // how it moves. 1 Flow: colour layers drift through the band (the original). 2 Rise: bars grow up from the middle outward
       // and the outline morphs flat → curve → peak as it crosses the screen. 3 Pulse: rings of colour breathe out from a hot core.
       // 4 Swipe: the colours sweep across in a diagonal staircase. 5 Halftone: the band dissolves into growing dots at its edges
       // instead of a blur. 6 Stretch: thin and calm at rest, it swells and brightens with the speed of your scroll.
-      mode: 1 };
+      mode: 5 };   // Halftone, with the settings tuned in the preview
     const FS = `
     precision highp float;
     uniform vec2 uRes, uVP; uniform float uDpr, uTop, uThickPx, uWave, uWaves, uFadeT, uFadeB, uGrain;
