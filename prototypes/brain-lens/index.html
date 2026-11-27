@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="../../vendor/styles.css">
 <style>
   @font-face{font-family:"Geist Mono";src:url(../../fonts/GeistMono-Regular.woff2) format("woff2");font-weight:400;font-display:swap}
+  @font-face{font-family:"Geist Mono";src:url(../../fonts/GeistMono-Medium.woff2) format("woff2");font-weight:500;font-display:swap}
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;background:#000;overflow:hidden}
   canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
@@ -54,8 +55,9 @@ void main(){
 <script id="brain-fs" type="x-shader/x-fragment">#version 300 es
 precision highp float;
 uniform sampler2D uTissue, uNormals;
-uniform vec3 uCamPos, uKeyDir, uAccent, uBase;
-uniform float uMetal, uRough, uKey, uFill, uAmbient, uRim, uTexMix, uBump;
+uniform vec3 uCamPos, uKeyDir, uAccent, uBase, uVeinCol;
+uniform float uMetal, uRough, uKey, uFill, uAmbient, uRim, uTexMix, uBump, uLumps, uVeins;
+uniform mat3 uModelInv;
 in vec3 vW, vN, vT;
 in vec2 vUV;
 out vec4 outColor;
@@ -67,18 +69,33 @@ vec3 env(vec3 r){
   c += uAccent*.05*smoothstep(.2, -.6, r.y);
   return c;
 }
+float h31(vec3 p){ p = fract(p*.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y)*p.z); }
+float vn3(vec3 p){ vec3 i = floor(p), f = fract(p), u = f*f*(3. - 2.*f);
+  return mix(mix(mix(h31(i), h31(i + vec3(1, 0, 0)), u.x), mix(h31(i + vec3(0, 1, 0)), h31(i + vec3(1, 1, 0)), u.x), u.y),
+             mix(mix(h31(i + vec3(0, 0, 1)), h31(i + vec3(1, 0, 1)), u.x), mix(h31(i + vec3(0, 1, 1)), h31(i + vec3(1, 1, 1)), u.x), u.y), u.z); }
+float fbm3(vec3 p){ float s = 0., a = .5; for (int i = 0; i < 4; i++){ s += a*vn3(p); p = p*2.07 + 13.1; a *= .5; } return s; }
+// thin bright lines where noise crosses its middle: cracks in the rock
+float cracks(vec3 p){ float n = fbm3(p*6.) - .5; float m = fbm3(p*13. + 7.) - .5; return max(smoothstep(.016, .0, abs(n)), .6*smoothstep(.012, .0, abs(m))); }
 float ggx(float ndh, float a){ float a2 = a*a, d = ndh*ndh*(a2 - 1.) + 1.; return a2/(3.14159*d*d); }
 void main(){
   vec3 ng = normalize(vN), t = normalize(vT - ng*dot(ng, vT));
   vec3 bump = texture(uNormals, vUV).xyz*2. - 1.;
   bump.xy *= uBump;
   vec3 n = normalize(t*bump.x - cross(ng, t)*bump.y + ng*bump.z);
+  // lumps of rock over the folds: tilt the normal along the slope of a coarse noise (in the brain's own space)
+  vec3 lp = uModelInv*vW;
+  const float e = .02;
+  float n0 = fbm3(lp*5.);
+  vec3 grad = vec3(fbm3((lp + vec3(e, 0, 0))*5.) - n0, fbm3((lp + vec3(0, e, 0))*5.) - n0, fbm3((lp + vec3(0, 0, e))*5.) - n0)/e;
+  n = normalize(n - transpose(uModelInv)*grad*.1*uLumps);   // the slope, back in world space
   vec3 v = normalize(uCamPos - vW);
   if (dot(ng, v) < 0.){ ng = -ng; n = -n; }
   vec3 skin = pow(texture(uTissue, vUV).rgb, vec3(2.2));
   float lum = dot(skin, vec3(.3, .5, .2));
   vec3 albedo = mix(uBase, uBase*skin/max(lum, .05)*.6, uTexMix);
   float cavity = mix(.35, 1., smoothstep(.08, .45, lum));            // the grooves sit in shadow
+  float rock = fbm3(lp*9. + 3.);
+  albedo *= mix(1., mix(.12, 1.3, smoothstep(.32, .68, rock)), uLumps*.8);   // blotches of dark volcanic rock
   vec3 f0 = mix(vec3(.04), albedo, uMetal);
   float a = max(uRough*uRough, .02);
   float ndv = max(dot(n, v), 1e-3);
@@ -92,7 +109,7 @@ void main(){
     vec3 F = f0 + (1. - f0)*pow(1. - max(dot(h, v), 0.), 5.);
     vec3 spec = F*ggx(ndh, a)*.25/max(ndl*ndv, .05)*ndl;
     vec3 diff = (1. - F)*(1. - uMetal)*albedo/3.14159*ndl;
-    col += (diff + spec)*I*3.2;
+    col += (diff + spec)*I*1.7;
   }
   // what the metal mirrors, and a little ambient
   vec3 Fv = f0 + (1. - f0)*pow(1. - ndv, 5.);
@@ -101,6 +118,11 @@ void main(){
   col *= cavity;
   // a thin accent rim where the surface turns away
   col += uAccent*pow(1. - max(dot(ng, v), 0.), 4.)*uRim*.5;
+  // glowing veins: the tissue map's blood vessels, and cracks in the rock between them
+  float vessel = smoothstep(.36, .2, skin.g/max(skin.r, .01))*smoothstep(.02, .12, lum);
+  float crack = cracks(lp)*(.4 + .6*smoothstep(.3, .7, n0));
+  float glow = max(vessel*.18, crack)*uVeins;
+  col += uVeinCol*glow*(.25 + .75*max(dot(n, normalize(uKeyDir)), 0.))*.9;
   outColor = vec4(col, 1.);
 }
 </script>
@@ -139,6 +161,7 @@ void main(){
   }
   float t = back/max(fwd + back, 1.);
   vec3 sorted = mix(lo, hi, t);
+  sorted = mix(sorted, vec3(max(max(hi.r, hi.g), hi.b))*1.15, .55);        // bleached toward white, as the reference's streaks are
   outColor = vec4(mix(base.rgb, sorted, uAmount*step(1., fwd + back)), base.a);
 }
 </script>
@@ -150,7 +173,7 @@ precision highp float;
 uniform sampler2D uImg;
 uniform vec2 uRes, uCenter;
 uniform float uRadius, uBend, uSplit, uRimGlow, uSoft, uZoom;
-uniform vec3 uAccent;
+uniform vec3 uAccent, uRimLine;
 out vec4 outColor;
 void main(){
   vec2 uv = gl_FragCoord.xy/uRes;
@@ -158,7 +181,11 @@ void main(){
   float r = length(st)/uRadius;
   float sd = (length(st) - uRadius)/uRadius;              // signed distance to the rim (in radii)
   float inside = smoothstep(uSoft, 0., sd);
-  if (inside <= 0.){ outColor = vec4(0.); return; }
+  if (inside <= 0.){
+    float out_ = exp(-sd*45.)*.35*uRimGlow;
+    outColor = vec4(uAccent*out_, min(out_, 1.));
+    return;
+  }
   // like a thick glass disc: barely any bend in the middle, more and more toward the rim
   float rr = clamp(r, 0., .999);
   float bulge = 1./sqrt(1. - rr*rr) - 1.;
@@ -166,15 +193,15 @@ void main(){
   vec3 col;
   for (int c = 0; c < 3; c++){
     float k = uBend*(1. + (float(c) - 1.)*uSplit);
-    vec2 off = -dir*bulge*k*.04/vec2(uRes.x/uRes.y, 1.);
+    vec2 off = -dir*(bulge*k*.04 + (float(c) - 1.)*uSplit*.004*rr)/vec2(uRes.x/uRes.y, 1.);
     vec2 suv = (uv - uCenter)/uZoom + uCenter + off;
     col[c] = texture(uImg, suv)[c];
   }
   // the rim: light caught in the edge of the glass
   float d = max(-sd, 0.);
-  float edge = exp(-d*38.)*1.6 + exp(-d*9.)*.18;                // bright at the rim, gone by a third of the way in
+  float edge = exp(-d*60.)*1.2 + exp(-d*12.)*.12;               // bright at the rim, gone a little way in
   col += uAccent*edge*uRimGlow*.6*inside;
-  col += vec3(1.)*smoothstep(.02, .0, abs(sd + .012))*.06;   // a fine bright line at the very edge
+  col += uRimLine*smoothstep(.012, .0, abs(sd + .006))*2.2*uRimGlow;   // the thin bright line of the rim
   outColor = vec4(col, inside);
 }
 </script>
@@ -202,14 +229,14 @@ void main(){
   float r2 = dot(pc, pc);
   if (r2 > 1.) discard;
   float r = sqrt(r2);
-  float core = 1. - smoothstep(.36, .42, r);
+  float core = 1. - smoothstep(.3, .42, r);
   vec2 nc = pc/.42;
   vec3 nrm = vec3(nc, sqrt(max(1. - dot(nc, nc), 0.)));
   vec3 L = normalize(vec3(-.461, .659, .593));
   float diff = max(dot(nrm, L), 0.)*.8 + .2;
   float spec = pow(max(dot(reflect(-L, nrm), vec3(0., 0., 1.)), 0.), 24.);
   vec3 bead = uAccent*diff + vec3(1., .94, .84)*spec*.9 + uAccent*(1. - nrm.z)*.28;
-  float halo = (1. - smoothstep(.4, 1., r))*.35*uGlow;
+  float halo = (1. - smoothstep(.35, 1., r))*.22*uGlow;
   vec3 col = bead*core + uAccent*halo;
   outColor = vec4(col*vB, max(core, halo*.6)*vB);
 }
@@ -358,14 +385,17 @@ void main(){
   /* ---- controls (DialKit) */
   const cfg = {
     Brain: {
-      spin:[.12, -1, 1, .01],            // turns a second
-      tilt:[.3, -1.2, 1.2, .01],
-      size:[1.25, .4, 1.8, .01],
-      base:"#8c8f93",
+      spin:[.08, -1, 1, .01],            // turns a second
+      tilt:[.12, -1.2, 1.2, .01],
+      size:[2.05, .4, 3, .01],
+      base:"#b08a80",
       metalness:[.6, 0, 1, .01],
       roughness:[.5, .05, 1, .01],
       texture:[.2, 0, 1, .01],
       bumps:[1, 0, 3, .01],
+      lumps:[1.2, 0, 3, .01],              // rocky lumps over the folds
+      veins:[1, 0, 3, .01],              // glowing cracks and vessels
+      veinColour:"#ff6a1f",
     },
     Lights: {
       key:[1, 0, 4, .01],
@@ -375,7 +405,8 @@ void main(){
       followMouse:[.24, 0, 1, .01],
     },
     Lens: {
-      radius:[.29, .1, .6, .005],
+      radius:[.435, .1, .6, .005],
+      rimLine:"#ffc21a",
       bend:[.5, 0, 3, .01],
       colourSplit:[.5, 0, 2, .01],
       rimGlow:[1, 0, 4, .01],
@@ -383,21 +414,21 @@ void main(){
     },
     Particles: {
       count:[512, 0, 1024, 1],
-      spread:[.35, 0, 1, .01],           // radius of the disc they gather into
-      size:[1, .2, 4, .01],
+      spread:[1, 0, 1.2, .01],           // how much of the lens they fill
+      size:[.65, .1, 3, .01],
       glow:[1, 0, 3, .01],
-      drift:[.2, 0, 1, .01],
+      drift:[.12, 0, 1, .01],
       mousePush:[1, 0, 3, .01],
     },
     PixelSort: {
-      amount:[.4, 0, 1, .01],
-      threshold:[.5, 0, 1, .01],
+      amount:[.8, 0, 1, .01],
+      threshold:[.62, 0, 1, .01],
       length:[.4, 0, 1, .01],
-      angle:[33, 0, 360, 1],
+      angle:[4, 0, 360, 1],
     },
     Tracking: {
       show:true,
-      blobs:[15, 0, 15, 1],
+      blobs:[8, 0, 15, 1],
       links:true,
       labels:true,
       opacity:[.85, 0, 1, .01],
@@ -420,7 +451,7 @@ void main(){
   try {
     if (window.DialKit){
       DialKit.createDialRoot({ position:'top-right', theme:'dark', defaultOpen: innerWidth > 800 });
-      DialKit.createDialKit('Brain under the lens', cfg, { id:'brain-lens-v1', persist:true }).subscribe(v => { P = v; wake(); });
+      DialKit.createDialKit('Brain under the lens', cfg, { id:'brain-lens-v2', persist:true }).subscribe(v => { P = v; wake(); });
     }
   } catch (e) { console.warn('Controls unavailable', e); }
   const lin = h => { h = String(h).replace('#', ''); if (h.length === 3) h = [...h].map(x => x + x).join(''); return [0, 2, 4].map(i => Math.pow(parseInt(h.substr(i, 2), 16)/255, 2.2)); };
@@ -451,13 +482,13 @@ void main(){
 
   // particles: each has a home in a golden-angle disc, and springs toward it while drifting
   const parts = [];
-  for (let i = 0; i < MAXP; i++) parts.push({ x:.5 + (Math.random() - .5)*.6, y:.5 + (Math.random() - .5)*.6, vx:0, vy:0, ph:Math.random()*6.283, s:.6 + Math.random()*.8, b:.55 + Math.random()*.45 });
+  for (let i = 0; i < MAXP; i++) parts.push({ x:.5 + (Math.random() - .5)*.6, y:.5 + (Math.random() - .5)*.6, vx:0, vy:0, ph:Math.random()*6.283, s:.85 + Math.random()*.3, b:.7 + Math.random()*.3 });
   function stepParticles(dt, t){
     const n = Math.min(MAXP, Math.round(P.Particles.count)), aspect = (W && H) ? W/H : innerWidth/Math.max(innerHeight, 1);
-    const R = .05 + .75*P.Particles.spread;
+    const R = P.Lens.radius*.97*P.Particles.spread;
     for (let i = 0; i < n; i++){
       const q = parts[i];
-      const rad = Math.sqrt((i + .5)/n)*R*.5, ang = i*2.39996323 + t*.05;
+      const rad = Math.sqrt((i + .5)/n)*R, ang = i*2.39996323;
       let hx = .5 + Math.cos(ang)*rad/aspect, hy = .5 + Math.sin(ang)*rad;
       hx += Math.sin(t*1.11 + q.ph*1.3)*.025*P.Particles.drift/aspect;
       hy += Math.sin(t*1.37 + q.ph*1.618 + 1.7)*.025*P.Particles.drift;
@@ -468,16 +499,15 @@ void main(){
         ax += dx*f*60/aspect; ay += dy*f*60;
       }
       q.vx += ax*dt; q.vy += ay*dt; q.x += q.vx*dt; q.y += q.vy*dt;
-      pBuf.set([q.x, q.y, 6*q.s, q.b], i*4);
+      pBuf.set([q.x, q.y, 9*q.s, q.b], i*4);
     }
     return n;
   }
 
-  // the tracking readout follows points on the brain's surface and a few in the swarm
-  const TRACK = [];
-  { const n = V.length/12; for (let i = 0; i < 15; i++) TRACK.push(Math.floor(((i*0.6180339887) % 1)*n)); }
-  const boxes = TRACK.map(() => ({ x:0, y:0, s:0, a:0 }));
-
+  // the tracking readout: the screen is split into an 8 x 8 grid, and the cells where the brain is
+  // brightest are boxed, labelled with their position and linked up (as the reference's blob tracker does)
+  const GRID = 8;
+  const slots = new Map();                          // cell index -> box, kept between frames so boxes ease
   let time = 0, model = rotX(-Math.PI/2), camPos = [0, 0, 9], view = 3.1;
   function draw(){
     if (!W) return;
@@ -486,7 +516,7 @@ void main(){
     const cam = [1, 0, 0, 0, 1, 0, 0, 0, 1];
     camPos = [0, 0, D];
     // stand the brain upright (its crown is +z in the file), spin it about the vertical, tilt it toward us
-    model = mul(rotX(P.Brain.tilt), mul(rotY(t*P.Brain.spin), rotX(-Math.PI/2)));
+    model = mul(rotX(P.Brain.tilt), mul(rotY(Math.PI/2 + t*P.Brain.spin*2*Math.PI), rotX(-Math.PI/2)));
     const accent = lin(P.Finish.accent);
     const key = [.55 - .5 + (mouse.x - .5)*P.Lights.followMouse*2, .23 + .2 + (mouse.y - .5)*P.Lights.followMouse*2, .75];
 
@@ -504,6 +534,8 @@ void main(){
     gl.uniform1f(u.uMetal, P.Brain.metalness); gl.uniform1f(u.uRough, P.Brain.roughness);
     gl.uniform1f(u.uKey, P.Lights.key); gl.uniform1f(u.uFill, P.Lights.fill); gl.uniform1f(u.uAmbient, P.Lights.ambient);
     gl.uniform1f(u.uRim, P.Lights.rim); gl.uniform1f(u.uTexMix, P.Brain.texture); gl.uniform1f(u.uBump, P.Brain.bumps);
+    gl.uniform1f(u.uLumps, P.Brain.lumps); gl.uniform1f(u.uVeins, P.Brain.veins); gl.uniform3fv(u.uVeinCol, lin(P.Brain.veinColour));
+    gl.uniformMatrix3fv(u.uModelInv, false, transpose(model));
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tissue); gl.uniform1i(u.uTissue, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, normals); gl.uniform1i(u.uNormals, 1);
     gl.bindVertexArray(vao); gl.drawElements(gl.TRIANGLES, triCount, gl.UNSIGNED_SHORT, 0);
@@ -517,7 +549,7 @@ void main(){
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, brainT.t); gl.uniform1i(u.uImg, 0);
     const a = P.PixelSort.angle*Math.PI/180;
     gl.uniform2f(u.uRes, W, H); gl.uniform2f(u.uDir, Math.cos(a), Math.sin(a));
-    gl.uniform1f(u.uAmount, P.PixelSort.amount); gl.uniform1f(u.uThreshold, P.PixelSort.threshold*.6); gl.uniform1f(u.uLength, P.PixelSort.length*.6);
+    gl.uniform1f(u.uAmount, P.PixelSort.amount); gl.uniform1f(u.uThreshold, P.PixelSort.threshold*.42); gl.uniform1f(u.uLength, P.PixelSort.length*.6);
     gl.bindVertexArray(emptyVao); gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     // 3: the lens over black, then the particles on top
@@ -528,7 +560,7 @@ void main(){
     gl.uniform2f(u.uRes, W, H); gl.uniform2f(u.uCenter, .5, .5);
     gl.uniform1f(u.uRadius, P.Lens.radius); gl.uniform1f(u.uBend, P.Lens.bend); gl.uniform1f(u.uSplit, P.Lens.colourSplit*.4);
     gl.uniform1f(u.uRimGlow, P.Lens.rimGlow); gl.uniform1f(u.uSoft, .004/P.Lens.radius); gl.uniform1f(u.uZoom, P.Lens.zoom);
-    gl.uniform3fv(u.uAccent, accent);
+    gl.uniform3fv(u.uAccent, accent); gl.uniform3fv(u.uRimLine, lin(P.Lens.rimLine));
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     const n = stepped;
@@ -574,46 +606,76 @@ void main(){
     const k = hud.width/CW;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, hud.width, hud.height);
-    if (!P.Tracking.show) return;
+    if (!P.Tracking.show) { slots.clear(); return; }
     ctx.setTransform(k, 0, 0, k, 0, 0);
-    const n = Math.round(P.Tracking.blobs), acc = P.Finish.accent;
-    const pts = [];
-    for (let i = 0; i < n; i++){
-      const vi = TRACK[i]*12;
-      const p = apply(model, [V[vi]*1.14*.62, V[vi + 1]*.985*.62, V[vi + 2]*.96*.62]);
-      const nn = apply(model, [V[vi + 3], V[vi + 4], V[vi + 5]]);
-      const facing = nn[2] > .15;
-      let s = project(p); s = throughLens(s);
-      const B = boxes[i];
-      const want = facing && s ? 1 : 0;
-      B.a += (want - B.a)*.12;
-      if (s){ B.x = s[0]*CW; B.y = (1 - s[1])*CH; }
-      B.s = 18 + 34*(.5 + .5*Math.sin(t*.7 + i*1.7));
-      if (B.a > .02) pts.push(B);
+    // weigh each grid cell by how much brightly lit, camera-facing surface falls in it
+    const key = (() => { const v = [(mouse.x - .5)*P.Lights.followMouse*2 + .05, .43 + (mouse.y - .5)*P.Lights.followMouse*2, .75], l = Math.hypot(...v); return v.map(x => x/l); })();
+    const wsum = new Float32Array(GRID*GRID), xs = new Float32Array(GRID*GRID), ys = new Float32Array(GRID*GRID);
+    const sc = P.Brain.size > 0 ? 1 : 1, nV = V.length/12;
+    for (let i = 0; i < nV; i += 3){
+      const o = i*12;
+      const p = apply(model, [V[o]*1.14*.62, V[o + 1]*.985*.62, V[o + 2]*.96*.62]);
+      const nn = apply(model, [V[o + 3], V[o + 4], V[o + 5]]);
+      if (nn[2] < .2) continue;
+      const lit = Math.max(0, nn[0]*key[0] + nn[1]*key[1] + nn[2]*key[2]);
+      const w = lit*lit*nn[2];
+      if (w < .05) continue;
+      let s2 = throughLens(project(p));
+      if (!s2) continue;
+      const cx = Math.floor(s2[0]*GRID), cy = Math.floor((1 - s2[1])*GRID);
+      if (cx < 0 || cy < 0 || cx >= GRID || cy >= GRID) continue;
+      const c = cy*GRID + cx;
+      wsum[c] += w; xs[c] += s2[0]*w; ys[c] += (1 - s2[1])*w;
     }
-    ctx.lineWidth = 1;
-    ctx.font = '10px "Geist Mono", ui-monospace, Menlo, monospace';
-    ctx.textBaseline = 'bottom';
-    if (P.Tracking.links && pts.length > 1){
-      ctx.strokeStyle = `rgba(255,255,255,${.28*P.Tracking.opacity})`;
-      ctx.setLineDash([2, 3]);
-      ctx.beginPath();
-      pts.forEach((b, i) => { if (i) ctx.lineTo(b.x, b.y); else ctx.moveTo(b.x, b.y); });
-      ctx.stroke();
+    let best = 0; for (const w of wsum) best = Math.max(best, w);
+    const want = [];
+    for (const c of [...wsum.keys()].filter(c => wsum[c] > best*.18).sort((a, b) => wsum[b] - wsum[a])){
+      if (want.length >= Math.round(P.Tracking.blobs)) break;
+      const x = xs[c]/wsum[c], y = ys[c]/wsum[c];
+      if (want.every(o => Math.hypot((xs[o]/wsum[o] - x)*CW, (ys[o]/wsum[o] - y)*CH) > Math.min(CW, CH)/GRID*.8)) want.push(c);
+    }
+    const cellPx = Math.min(CW, CH)/GRID;
+    for (const c of want){
+      const x = xs[c]/wsum[c]*CW, y = ys[c]/wsum[c]*CH, act = Math.min(1, wsum[c]/best);
+      const size = cellPx*(.78 + .5*act);
+      const B = slots.get(c);
+      if (B){ B.x += (x - B.x)*.25; B.y += (y - B.y)*.25; B.s += (size - B.s)*.2; B.on = 1; }
+      else slots.set(c, { x, y, s:size, a:0, on:1 });
+    }
+    for (const [c, B] of slots){
+      if (!want.includes(c)) B.on = 0;
+      B.a += (B.on - B.a)*.18;
+      if (B.a < .02 && !B.on) slots.delete(c);
+    }
+    const boxes = [...slots.values()].sort((a, b) => a.y - b.y || a.x - b.x);
+    const O = P.Tracking.opacity;
+    // dashed links: each box to its nearest neighbour above it, some square-cornered, some straight
+    if (P.Tracking.links && boxes.length > 1){
+      ctx.setLineDash([4, 4]); ctx.lineWidth = 1.2;
+      boxes.forEach((b, i) => {
+        if (!i) return;
+        let near = boxes[0], nd = 1e9;
+        for (let j = 0; j < i; j++){ const d = Math.hypot(boxes[j].x - b.x, boxes[j].y - b.y); if (d < nd){ nd = d; near = boxes[j]; } }
+        ctx.strokeStyle = `rgba(255,255,255,${.8*O*Math.min(b.a, near.a)})`;
+        ctx.beginPath(); ctx.moveTo(b.x, b.y);
+        if (i % 2) ctx.lineTo(near.x, b.y);
+        ctx.lineTo(near.x, near.y); ctx.stroke();
+      });
       ctx.setLineDash([]);
     }
-    pts.forEach((b, i) => {
-      const o = b.a*P.Tracking.opacity, h = b.s/2;
-      ctx.strokeStyle = i % 4 === 0 ? acc : `rgba(255,255,255,${o})`;
-      ctx.globalAlpha = i % 4 === 0 ? o : 1;
-      ctx.strokeRect(Math.round(b.x - h) + .5, Math.round(b.y - h) + .5, Math.round(b.s), Math.round(b.s));
-      ctx.globalAlpha = 1;
+    ctx.font = '500 15px "Geist Mono", ui-monospace, Menlo, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const b of boxes){
+      const h = b.s/2, o = b.a*O;
+      const x0 = Math.round(b.x - h) + .5, y0 = Math.round(b.y - h) + .5, sz = Math.round(b.s);
+      ctx.fillStyle = `rgba(255,255,255,${.06*o})`; ctx.fillRect(x0, y0, sz, sz);
+      ctx.strokeStyle = `rgba(255,255,255,${.92*o})`; ctx.lineWidth = 1.5; ctx.strokeRect(x0, y0, sz, sz);
       if (P.Tracking.labels){
-        ctx.fillStyle = `rgba(255,255,255,${o*.85})`;
-        const cx = Math.round(b.x/CW*99), cy = Math.round(b.y/CH*99);
-        ctx.fillText(String(cx).padStart(2, '0') + ',' + String(cy).padStart(2, '0'), Math.round(b.x - h), Math.round(b.y - h) - 3);
+        ctx.fillStyle = `rgba(255,255,255,${o})`;
+        const cx = Math.round(b.x/CW*99), cy = Math.round((1 - b.y/CH)*99);
+        ctx.fillText(String(cx).padStart(2, '0') + ',' + String(cy).padStart(2, '0'), Math.round(b.x), Math.round(b.y + h*.66));
       }
-    });
+    }
   }
 
   let stepped = 0;
