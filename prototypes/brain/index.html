@@ -75,11 +75,12 @@ uniform mat3 uBrain;      // brain -> world
 uniform vec3 uBrainPos, uCamPos;
 uniform mat3 uCamInv;
 uniform vec2 uProj;
+uniform float uPulse;
 out vec3 vL, vW, vN, vT;
 out vec2 vUV;
 const vec3 SC = vec3(1.14, .985, .96)*.74;    // the water magnifies it back up
 void main(){
-  vec3 w = uBrain*(aPos*SC) + uBrainPos;
+  vec3 w = uBrain*(aPos*SC*(1. + .035*(uPulse - .9))) + uBrainPos;
   vL = aPos; vW = w; vUV = aUV;
   vN = uBrain*(aNor/SC); vT = uBrain*(aTan*SC);
   vec3 pc = uCamInv*(w - uCamPos);
@@ -109,15 +110,6 @@ float heatPhase(vec3 p, float ridge){
   vec3 source = vec3(-.12, -.29, .14);
   float radius = length((p - source)*vec3(1., .91, 1.12));
   return radius*8.4 + .46*sin(p.y*7. + p.z*4.) + .34*sin(5.*p.x - 3.*p.z) + .48*ridge;
-}
-// cold to hot: indigo, blue, teal, green, yellow, orange, red
-vec3 thermal(float v){
-  vec3 c = mix(vec3(.13, .09, .61), vec3(.05, .50, .94), smoothstep(0., .21, v));
-  c = mix(c, vec3(.08, .89, .72), smoothstep(.19, .39, v));
-  c = mix(c, vec3(.42, .91, .22), smoothstep(.38, .55, v));
-  c = mix(c, vec3(1., .84, .10), smoothstep(.53, .72, v));
-  c = mix(c, vec3(1., .27, .055), smoothstep(.71, .87, v));
-  return mix(c, vec3(1., .07, .12), smoothstep(.85, 1., v));
 }
 
 void main(){
@@ -155,12 +147,12 @@ void main(){
   // thin edges let light through
   c += vec3(1., .13, .0)*pow(1. - gdv, 2.6)*(.35 + .9*core);
 
-  // the heat map: the wave's colour takes over, while the amber underneath still gives it form
-  float beat = uTime*1.46;
-  float heat = .5 + .5*cos(heatPhase(vL, crown) - beat);
-  float form = clamp(dot(1. - exp(-c*1.3), vec3(.28, .57, .15)), 0., 1.);
-  vec3 th = pow(thermal(heat), vec3(2.2))*(.20 + 1.2*form)*1.35;
-  c = mix(c*.8, th, .72 + .13*(.5 + .5*cos(beat)));
+  // the pulse: a wave of light runs out from low in the cortex on every beat, in amber only
+  float beat = uTime*.87*6.2831853;             // one wave per heartbeat
+  float wave2 = .5 + .5*cos(heatPhase(vL, crown) - beat);
+  wave2 = pow(wave2, 3.);
+  c += mix(vec3(1., .10, .001), HOT*1.6, crown)*wave2*(.2 + .8*core)*.6*uPulse;
+  c *= .55 + .45*uPulse*uPulse;                  // the whole brain brightens on the beat
 
   // a wet, glassy skin: it mirrors the studio and carries tight highlights
   float F = .045 + .955*pow(1. - ndv, 5.);
@@ -404,7 +396,7 @@ void main(){
     // the brain's own glow, softened by the water around it
     vec2 guv = G.uv.x < 0. ? vec2(-1.) : G.uv;
     vec3 bloom = guv.x < 0. ? vec3(0.) :
-      (soft(guv, L - 6.3).rgb*.30 + soft(guv, L - 5.3).rgb*.16 + soft(guv, L - 4.3).rgb*.05)/uScale;
+      (soft(guv, L - 6.3).rgb*.36 + soft(guv, L - 5.3).rgb*.34 + soft(guv, L - 4.3).rgb*.26 + soft(guv, L - 3.3).rgb*.14)/uScale*uPulse;
     // sunlight nets over the brain, strongest on its upper side
     vec2 bsp = (guv - .5)*vec2(uRes.x/uRes.y, 1.)*uView;
     float net = caustics(bsp*.9 + vec2(.13, .0), uTime*.55);
@@ -414,7 +406,7 @@ void main(){
     float wet = mix(G.water, G.toBrain, cover);      // the brain hides the water behind it
     if (G.water > 0.){
       // water takes the red out of what is seen through it (Beer-Lambert), and lends its own colour
-      vec3 through = exp(-wet*vec3(.75, .18, .10)*.6);
+      vec3 through = exp(-wet*vec3(.35, .12, .10)*.6);
       float lift = smoothstep(-.95, SEA, G.waterY);                    // 0 at the bottom, 1 at the surface
       vec3 body = mix(DEEPSEA, SHALLOW, lift*lift*lift);
       body *= .45 + .55*smoothstep(1., .35, length(sp - vec2(0., .1)));   // the sides of the ball sit in shadow
@@ -422,7 +414,7 @@ void main(){
       float sx = sp.x*7. + sp.y*1.6;
       float shafts = pow(.5 + .5*sin(sx + uTime*.35)*sin(sx*2.3 - uTime*.5 + 1.7), 3.);
       body *= 1. + 1.5*shafts*lift;
-      body += glowCol*.02;                                              // the brain lights the water round it
+      body += glowCol*.06*uPulse;                                      // the brain lights the water round it                                              // the brain lights the water round it
       inner = inner*through + body*(1. - exp(-wet*1.1))*.5*G.keep;
       // specks adrift and bubbles climbing
       float sparkle = motes(sp, 9., .05, 1.)*.5 + motes(sp, 17., .09, 2.)*.35 + motes(sp, 5.5, .16, 3.)*.9;
@@ -633,7 +625,10 @@ void main(){
     // the brain hangs in the liquid: it bobs and sways very slightly
     const brain = rotXY(Math.sin(t*.37)*.04 - ptr.y*.04, Math.sin(t*.23 + 1.3)*.06 + ptr.x*.06);
     const brainPos = [0, -.03 + Math.sin(t*.5)*.012, 0];
-    const pulse = 1 + .07*Math.sin(t*.8) + .03*Math.sin(t*2.1 + .7);
+    // a heartbeat: a strong thump, a softer second one, then rest (about 52 beats a minute)
+    const ph = (t*.87) % 1, thump = (c, w) => Math.exp(-(((ph - c)/w)**2));
+    const beat = thump(.08, .045) + .55*thump(.24, .05);
+    const pulse = .9 + .45*beat;
 
     // 1: the brain
     gl.bindFramebuffer(gl.FRAMEBUFFER, msFbo);
