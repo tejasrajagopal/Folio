@@ -37,6 +37,7 @@
   .m-list .works{margin-top:0}
   .m-list .wcell{padding:30px 42px 22px;gap:18px}
   .m-list .wtitle{font-size:16px}
+  .m-list .wtitle + .wmeta{margin-top:-12px} .m-list .wmeta{font-size:11px}
   /* phones (Figma "iPhone 16 – 23"): a frosted bar at the bottom (Works · About · Get in touch) and the filters in a box at the top */
   .m-list .dock{bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(353px,calc(100vw - 32px));max-width:none;height:auto;gap:4px;padding:4px;
     background:color-mix(in srgb,var(--bg) 70%,transparent);border:.5px solid color-mix(in srgb,var(--bg) 100%,transparent);box-shadow:0 4px 4px rgba(0,0,0,.09);
