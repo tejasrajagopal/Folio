@@ -687,7 +687,7 @@ void main(){
   try {
     if (window.DialKit){
       DialKit.createDialRoot({ position:'top-right', theme:'dark', defaultOpen: innerWidth > 800 });
-      DialKit.createDialKit('Brain in a jar', cfg, { id:'brain-jar-v1', persist:true }).subscribe(v => { P = v; wake(); });
+      DialKit.createDialKit('Brain in a jar', cfg, { id:'brain-jar-v2', persist:true }).subscribe(v => { P = v; wake(); });
     }
   } catch (e) { console.warn('Controls unavailable', e); }
   // colours from the panel are sRGB; the shaders work in linear light
