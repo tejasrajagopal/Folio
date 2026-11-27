@@ -59,7 +59,7 @@
   WORKS.forEach(([id]) => {
     const i = cards.length;
     const el = makeCard(`<img data-src="works/${id}.webp" alt="" draggable="false" decoding="async"><canvas class="far"></canvas>`, i);
-    const card = { el, img:el.querySelector('img'), far:el.querySelector('canvas.far'), lbl:el.querySelector('.frame span'), id, fig:id, dummy:false };
+    const card = { el, img:el.querySelector('img'), far:el.querySelector('canvas.far'), lbl:el.querySelector('.frame span'), id, fig:String(i + 1).padStart(2, '0'), dummy:false };
     cards.push(card);
   });
   for (let d=0; d<MAX_DUMMIES; d++){

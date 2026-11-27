@@ -1,15 +1,24 @@
+  // The work: Nyuway, Avant and River. Every entry is a card in the orbit (works/<id>.webp, 1280×720); the first image of
+  // each project (GRID) is also its tile in the work grid. A tile opens the project's gallery (GALLERIES, works/<project>/).
   const WORKS = [
-    ["01","Ekaant Care — Stats"],["02","Ekaant Care — App"],["03","Ekaant Care — Mark"],["04","Ekaant Care — Campaign"],
-    ["05","Timelaps"],["06","Anduro"],["07","Avant — Identity"],["08","Avant — Illustration"],
-    ["09","River — Dashboard"],["10","River — Product"],["11","River — Data viz"],["12","Wayfind"],
-    ["13","Fintech — Payments"],["14","Realised"],["15","Rewards — Patches"],["16","Paw — Mark"],["17","Home services — Booking"]
+    ["nyuway-1","Nyuway — Wordmark"],["avant-1","Avant — Identity"],["river-1","River — AI agent for e-commerce"],
+    ["nyuway-2","Nyuway — Website"],["avant-2","Avant — Vault"],["river-2","River — Marketing spend"],
+    ["nyuway-3","Nyuway — Code protection"],["avant-3","Avant — Asset page"],["river-3","River — Funnel"],
+    ["nyuway-4","Nyuway — Bus shelter"],["avant-4","Avant — Real world assets"],["river-4","River — Dashboard"],
+    ["nyuway-5","Nyuway — Terminal"],["avant-5","Avant — Mark"],["river-5","River — Ask River"],
+    ["avant-6","Avant — Packaging"],["river-6","River — Sign in"]
   ];
-  const HIDDEN = { "10": true };
-  const SIZES  = { "10": 1.89 };
-  // what the project view says about each project. `_default` is the placeholder copy from the Figma frame: replace it
-  // (or add an entry per project) before this goes live.
+  const GRID = new Set(["nyuway-1","avant-1","river-1"]);
+  const HIDDEN = {}, SIZES = {};
+  // what the project view says about each project (descriptions as on enframe.studio; `_default` is the Figma placeholder)
   const PROJECT_INFO = {
     _default: { description: 'Project is a company that does so and so across so many verticals', industry: 'Industry', disciplines: 'Brand/Motion/Product' },
+    'Nyuway': { industry: 'AI Security', disciplines: 'Brand/Web',
+      description: 'Nyuway empowers enterprises to stay secure by preventing data leaks, shadow AI, and compliance risks across modern AI tools. Its brand identity blends the dynamic energy of matrix-style technographics with the clarity of glass — a visual language of transparency and strength.' },
+    'Avant': { industry: 'Crypto', disciplines: 'Brand/Product',
+      description: 'Avant is a wealth management platform for crypto treasury teams to collateralize bitcoin and earn real-world yield. Users borrow stablecoins against their bitcoin collateral and trade ownership stakes of whiskey, real estate, and clean energy.' },
+    'River': { industry: 'AI / Marketing', disciplines: 'Brand/Product',
+      description: 'River is an AI-powered tool that gives you a clear, actionable audit of your Meta Ads campaigns. It pinpoints what’s working, what’s wasting budget, and what to do next — all explained in plain English, not marketing jargon.' },
   };
   const MAX_DUMMIES = 30;
 

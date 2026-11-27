@@ -70,7 +70,7 @@ async function run(browser, base, name, opts){
   check(name, 'first work image has loaded', await ev(() => { const im = document.querySelector('.wcell:not([hidden]) img'); return !!im && im.naturalWidth > 0; }));
   const cells = () => ev(() => [...document.querySelectorAll('.wcell')].filter(c => !c.hidden).length);
   const all = await cells();
-  check(name, 'work grid has items', all >= 10, all + ' items');
+  check(name, 'work grid shows the three projects', all === 3, all + ' items');
   if (phone){
     check(name, 'phone: filter bar is shown', await ev(() => document.getElementById('mTop').classList.contains('show')));
     const d = await ev(() => { const c = document.getElementById('dockCta').getBoundingClientRect(), k = document.getElementById('dock').getBoundingClientRect(); return { cta: Math.round(c.width), dockRight: k.right, vw: innerWidth }; });

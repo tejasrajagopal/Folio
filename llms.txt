@@ -10,14 +10,6 @@ Every startup starts as a story. I help founders tell it through brand, product 
 
 ## Selected work
 
-- [Ekaant Care](https://tejasrajagopal.com/works/01.webp): Stats, App, Mark, Campaign
-- [Timelaps](https://tejasrajagopal.com/works/05.webp)
-- [Anduro](https://tejasrajagopal.com/works/06.webp)
-- [Avant](https://tejasrajagopal.com/works/07.webp): Identity, Illustration
-- [River](https://tejasrajagopal.com/works/09.webp): Dashboard, Data viz
-- [Wayfind](https://tejasrajagopal.com/works/12.webp)
-- [Fintech](https://tejasrajagopal.com/works/13.webp): Payments
-- [Realised](https://tejasrajagopal.com/works/14.webp)
-- [Rewards](https://tejasrajagopal.com/works/15.webp): Patches
-- [Paw](https://tejasrajagopal.com/works/16.webp): Mark
-- [Home services](https://tejasrajagopal.com/works/17.webp): Booking
+- [Nyuway](https://tejasrajagopal.com/#project-nyuway): Enterprise AI security and compliance. Brand and web design.
+- [Avant](https://tejasrajagopal.com/#project-avant): Real-world asset tokenisation platform. Brand and product design.
+- [River](https://tejasrajagopal.com/#project-river): AI audits for Meta Ads campaigns. Brand and product design.
