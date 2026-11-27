@@ -14,3 +14,4 @@
   }
   if (document.readyState === 'loading') addEventListener('DOMContentLoaded', begin); else begin();
   requestAnimationFrame(frame);
+  requestAnimationFrame(pvSync);   // a shared #project-… link opens straight on that project

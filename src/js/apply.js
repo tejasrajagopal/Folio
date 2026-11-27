@@ -63,7 +63,7 @@
     const wg = document.getElementById('worksGrid');
     wg.innerHTML = cards.filter(c => !c.dummy && c.show).map(c => {
       const project = c.title.split('—')[0].trim();
-      return `<article class="wcell" data-cat="projects" data-id="${c.id}"><div class="wframe"><div class="wimg"><img data-src="works/${c.id}.webp" alt="${c.title}" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle">${project}</h3></article>`;
+      return `<article class="wcell" data-cat="projects" data-id="${c.id}"><div class="wframe"><div class="wimg"><img data-src="works/${c.id}.webp" alt="${c.title}" width="1280" height="720" decoding="async"></div><i></i><i></i><i></i><i></i></div><h3 class="wtitle"><a href="#project-${pvSlug(project)}">${project}</a></h3></article>`;
     }).join('') + '<p class="wempty" hidden>No experiments here yet.</p>';
     applyFilter(currentFilter, true);
     // grid images load just before they scroll into view (native lazy-load fetched them all on phones,

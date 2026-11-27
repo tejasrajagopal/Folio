@@ -84,6 +84,18 @@ async function run(browser, base, name, opts){
   await ev(() => document.querySelector('[data-filter=all]').click()); await page.waitForTimeout(500);
   check(name, 'All filter restores everything', (await cells()) === all);
 
+  // project view: a tile opens its project over the page; Esc brings the work back where it was
+  const yBefore = await ev(() => Math.round(scrollY));
+  await page.click('.wcell:not([hidden]) .wtitle a'); await page.waitForTimeout(1200);
+  const pv = await ev(() => { const v = document.getElementById('projectView'); return { open: v.classList.contains('open'), hash: location.hash,
+    title: (v.querySelector('.pv-title') || {}).textContent || '', imgs: v.querySelectorAll('.pv-g img').length, bar: document.getElementById('dock').classList.contains('show'),
+    wide: v.scrollWidth - v.clientWidth }; });
+  check(name, 'a tile opens its project', pv.open && pv.hash.startsWith('#project-') && pv.title.length > 1 && pv.imgs > 0, JSON.stringify(pv));
+  check(name, 'project view keeps the bar and fits the screen', pv.bar && pv.wide <= 0, JSON.stringify(pv));
+  await page.keyboard.press('Escape'); await page.waitForTimeout(900);
+  const back = await ev(() => ({ open: document.getElementById('projectView').classList.contains('open'), hash: location.hash, y: Math.round(scrollY) }));
+  check(name, 'Esc closes the project and returns to the work', !back.open && back.hash === '' && Math.abs(back.y - yBefore) < 4, JSON.stringify(back));
+
   // theme switch (by hand only)
   await ev(() => document.getElementById('themeToggle').click()); await page.waitForTimeout(1200);
   check(name, 'theme switch turns dark on', await ev(() => document.documentElement.dataset.theme === 'dark'));

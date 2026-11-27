@@ -400,7 +400,7 @@
     const sdy = y - uiLastY;
     if (y < 60 || Math.abs(sdy) > 6){ const hide = y >= 60 && sdy > 0; uiLastY = y;
       if (hide !== uiHide){ uiHide = hide; document.documentElement.classList.toggle('ui-hide', hide); } }
-    const showDock = y + vh*0.6 > secs.wkTop;
+    const showDock = pvOpen || y + vh*0.6 > secs.wkTop;   // the bar stays up while a project is open
     if (dock._on !== showDock){ dock._on = showDock; dock.classList.toggle('show', showDock); mTop.classList.toggle('show', showDock && isList(V)); mTop.inert = !showDock; document.documentElement.classList.toggle('bar-on', showDock); edgeBlur.classList.toggle('show', showDock); if (exId === -1) dock.inert = !showDock; }
     if (F.gradient && F.gradientSpin){ gAngle = ((gAngle ?? F.gradientAngle) + F.gradientSpin*dt) % 360; paintFrame(gAngle); } else gAngle = null;
   }

@@ -6,6 +6,11 @@
   ];
   const HIDDEN = { "10": true };
   const SIZES  = { "10": 1.89 };
+  // what the project view says about each project. `_default` is the placeholder copy from the Figma frame: replace it
+  // (or add an entry per project) before this goes live.
+  const PROJECT_INFO = {
+    _default: { description: 'Project is a company that does so and so across so many verticals', industry: 'Industry', disciplines: 'Brand/Motion/Product' },
+  };
   const MAX_DUMMIES = 30;
 
   // ---------- DialKit config (defaults = Tejas's tuned values) ----------
