@@ -12,7 +12,11 @@ let body = cut('<body>', '</body>');
 const lenis = '<script src="vendor/lenis.min.js"></script>';
 if (!body.includes(lenis)) throw new Error('lenis tag not found');
 body = body.replace(lenis, () => '<script>' + read('vendor/lenis.min.js') + '</script>');
-body = body.replace(/<script>\s*\/\/ DialKit[\s\S]*?<\/script>/, '');          // the #tune panel isn't part of the preview
+body = body.replace(/<script>\s*\/\/ DialKit[\s\S]*?<\/script>/, '');
+// the preview host doesn't serve .jxl files, so the preview shows the WebP copies (the site itself keeps JPEG XL first)
+const jxlSource = `<source type="image/jxl" srcset="\${set('jxl')}" sizes="\${sizes}">`;
+if (!body.includes(jxlSource)) throw new Error('JPEG XL <source> not found in the built page');
+body = body.replace(jxlSource, '');          // the #tune panel isn't part of the preview
 const out = `<title>Folio Motion Preview</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400&family=Inter+Tight:wght@500;700&display=swap">
 <style>${read('vendor/lenis.css')}</style>
