@@ -68,6 +68,59 @@ vec3 studio(vec3 r){
 }
 </script>
 
+
+<!-- shared: the sea's surface. Gerstner waves, a slosh, choppy detail, and the ripple simulation -->
+<script id="water" type="x-shader/x-fragment">
+uniform float uSea;           // resting water level
+uniform vec4  uWaves[8];      // direction x, direction z, wavenumber, amplitude
+uniform float uWPhase[8];
+uniform vec4  uSlosh;         // the four standing slosh modes of the bowl
+uniform float uDetailAmp, uRDisc, uSimOn;
+uniform int   uDetailOct;
+uniform sampler2D uSim;       // ripple simulation: height in r
+float wHash(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y)*p3.z); }
+float wNoise(vec2 p){ vec2 i = floor(p), f = fract(p), u = f*f*(3. - 2.*f);
+  return mix(mix(wHash(i), wHash(i + vec2(1, 0)), u.x), mix(wHash(i + vec2(0, 1)), wHash(i + vec2(1, 1)), u.x), u.y); }
+// one octave of sharp, folded chop
+float seaOctave(vec2 uv, float choppy){
+  uv += wNoise(uv)*2. - 1.;
+  vec2 wv = 1. - abs(sin(uv)), swv = abs(cos(uv));
+  wv = mix(wv, swv, wv);
+  return pow(1. - pow(wv.x*wv.y, .65), choppy);
+}
+float detailH(vec2 p, int iters){
+  float freq = 7.5, amp = uDetailAmp, choppy = 3.6, h = 0.;
+  vec2 uv = p; uv.x *= .8;
+  mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
+  float tt = uTime*.32;
+  for (int i = 0; i < 8; i++){
+    if (i >= iters) break;
+    h += (seaOctave((uv + tt)*freq, choppy) + seaOctave((uv - tt)*freq, choppy))*amp;
+    uv = m*uv; freq *= 1.9; amp *= .24; choppy = mix(choppy, 1., .2);
+  }
+  return h - uDetailAmp*.8;
+}
+float sloshH(vec2 p){ vec2 q = p/max(uRDisc, .05);
+  return uSlosh.x*sin(1.5707963*q.x) + uSlosh.y*sin(1.5707963*q.y) + uSlosh.z*cos(3.1415927*q.x) + uSlosh.w*cos(3.1415927*q.y); }
+vec2 sloshG(vec2 p){ float R = max(uRDisc, .05); vec2 q = p/R;
+  return vec2(uSlosh.x*1.5707963*cos(1.5707963*q.x) - uSlosh.z*3.1415927*sin(3.1415927*q.x),
+              uSlosh.y*1.5707963*cos(1.5707963*q.y) - uSlosh.w*3.1415927*sin(3.1415927*q.y))/R; }
+float gerstnerY(vec2 p){ float h = 0.; for (int i = 0; i < 8; i++){ vec4 w = uWaves[i]; h += w.w*sin(w.z*dot(w.xy, p) - uWPhase[i]); } return h; }
+vec2 gerstnerG(vec2 p){ vec2 g = vec2(0.); for (int i = 0; i < 8; i++){ vec4 w = uWaves[i]; g += w.xy*w.z*w.w*cos(w.z*dot(w.xy, p) - uWPhase[i]); } return g; }
+float simH(vec2 p){ return uSimOn > .5 ? textureLod(uSim, clamp(p*.5 + .5, .002, .998), 0.).r : 0.; }
+float waterH(vec2 p){ return uSea + sloshH(p) + gerstnerY(p) + detailH(p, 2) + simH(p); }
+vec3 waterN(vec2 p, int oct){
+  vec2 g = gerstnerG(p) + sloshG(p);
+  const float e = .004;
+  g.x += (detailH(p + vec2(e, 0.), oct) - detailH(p - vec2(e, 0.), oct))/(2.*e);
+  g.y += (detailH(p + vec2(0., e), oct) - detailH(p - vec2(0., e), oct))/(2.*e);
+  const float es = 2./256.;
+  g.x += (simH(p + vec2(es, 0.)) - simH(p - vec2(es, 0.)))/(2.*es);
+  g.y += (simH(p + vec2(0., es)) - simH(p - vec2(0., es)))/(2.*es);
+  return normalize(vec3(-g.x, 1., -g.y));
+}
+</script>
+
 <script id="brain-vs" type="x-shader/x-vertex">#version 300 es
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNor;
@@ -182,19 +235,22 @@ uniform mat3  uCam;       // camera basis (columns: right, up, back)
 uniform vec3  uBrainPos;
 uniform float uPulse, uScale;
 uniform mat3  uJar, uJarInv;  // the jar's own tilt (jar -> world, world -> jar); the brain and the sea stay put
-uniform float uSea;           // water level
-uniform vec3  uShallow, uDeep;
-uniform float uMurk, uClarity, uShafts, uMotes, uSwellAmp, uWaterGlow;
+uniform vec3  uWaterTint;     // what fraction of each colour survives a unit of water
+uniform vec3  uInscat;        // the water's own dim glow
+uniform vec3  uLampCol, uLampDir;
+uniform float uMurk, uClarity, uMotes, uWaterGlow, uCaustics, uGodRays;
+uniform int   uRaySteps;
+uniform sampler2D uCaustic;   // light focused by the waves, on a plane through the brain
 uniform vec3  uRipples;       // seconds since each of the last three beats
 uniform float uRipple, uRippleSpeed;
 uniform float uGlassRefl, uGlassTint, uBloom, uBrainBehind;
-uniform float uExposure, uContrast, uSat;
-uniform vec3  uShadowTint;
+
 uniform mat3  uCamInv;
 uniform vec2  uProjUV;     // world offset at the jar -> screen uv
 uniform sampler2D uSpecimen;   // the brain, already drawn, with its blurred copies in the mip chain
 out vec4 outColor;
 //STUDIO
+//WATER
 
 const float CAM_D = 9.0;
 
@@ -233,29 +289,16 @@ float ring(float r, float age){
   float front = r - age*uRippleSpeed;
   return exp(-age*.75)*exp(-front*front*40.)*sin(front*30.);
 }
-float swell(vec2 p){
-  float t = uTime;
-  float h = .020*sin(p.x*4.6 + t*1.5) + .015*sin(p.y*5.9 - t*1.15 + p.x*2.1)
-          + .009*sin((p.x + p.y)*10.5 + t*2.3) + .005*sin(p.x*17. - p.y*13. - t*3.1);
-  float r = length(p - uBrainPos.xz);
-  float rings = ring(r, uRipples.x) + ring(r, uRipples.y) + ring(r, uRipples.z);
-  return h*uSwellAmp + rings*.05*uRipple;
-}
-vec3 swellNormal(vec2 p){
-  const vec2 e = vec2(.004, 0.);
-  return normalize(vec3(swell(p - e.xy) - swell(p + e.xy), 2.*e.x, swell(p - e.yx) - swell(p + e.yx)));
-}
-// the net of light that sunlit water throws on whatever lies under it
-float caustics(vec2 p, float t){
-  p = mod(p*6.2831853, 6.2831853) - 250.;
-  vec2 i = p; float c = 1.;
-  for (int n = 0; n < 4; n++){
-    float tt = t*(1. - 3.5/float(n + 1));
-    i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
-    c += 1./length(vec2(p.x/(sin(i.x + tt)/.005), p.y/(cos(i.y + tt)/.005)));
-  }
-  c = 1.17 - pow(c/4., 1.4);
-  return pow(abs(c), 8.);
+// height of the surface above its resting level, and its normal (fine detail on, for shading)
+float swell(vec2 p){ return waterH(p) - uSea; }
+vec3 swellNormal(vec2 p){ return waterN(p, uDetailOct); }
+// the focused light (caustics) at a point under the water, found by following the light down to the plane
+const float CPLANE = -.05;
+vec3 lightIn(){ return refract(uLampDir, vec3(0., 1., 0.), 1./1.336); }
+vec3 causticAt(vec3 wp){
+  vec3 Lw = lightIn();
+  vec2 xz = wp.xz + Lw.xz*((wp.y - CPLANE)/(-Lw.y));
+  return textureLod(uCaustic, clamp(xz*.5 + .5, .001, .999), .9).rgb;
 }
 // drifting specks and rising bubbles
 float motes(vec2 p, float scale, float rise, float seed){
@@ -266,8 +309,7 @@ float motes(vec2 p, float scale, float rise, float seed){
   float live = step(.62, hash(id + seed + 5.3));
   return smoothstep(.07, .0, length(f - o*.7))*live;
 }
-#define SHALLOW uShallow
-#define DEEPSEA uDeep
+
 
 // one soft tap of a blurred copy of the brain
 vec4 soft(vec2 uv, float lod){
@@ -308,10 +350,14 @@ struct Path {
   float surf;       // 1 when the ray met the sea's surface
   float tir;        // 1 when the surface mirrored it back down
   vec3 surfP, surfN, surfD;
+  vec3 brainP;      // the point beside the brain the ray passed closest to
+  vec3 wO, wD;      // start and direction of its first stretch through water
+  float wLen;
+  vec3 wallP;       // where it met the far side of the bowl
 };
 
 bool traceBowl(vec3 ro, vec3 rd, float ng, float nw, out Path P){
-  P = Path(vec2(-1.), 0., 0., 0., 0., rd, 1., 0., 0., vec3(0.), vec3(0., 1., 0.), rd);
+  P = Path(vec2(-1.), 0., 0., 0., 0., rd, 1., 0., 0., vec3(0.), vec3(0., 1., 0.), rd, vec3(0.), vec3(0.), rd, 0., vec3(0.));
   vec2 h = sph(ro, rd, R_OUT);
   if (h.x < 0.) return false;
   vec3 p = ro + rd*h.x;
@@ -351,9 +397,9 @@ bool traceBowl(vec3 ro, vec3 rd, float ng, float nw, out Path P){
     if (P.uv.x < 0.){
       float s = clamp(dot(uBrainPos - p, d), 0., tEnd);
       vec3 q = p + d*s;
-      if (length(q - uBrainPos) < .8){ P.uv = toUV(q); P.toBrain = P.water + (wet ? max(s - .25, 0.) : 0.); }
+      if (length(q - uBrainPos) < .8){ P.uv = toUV(q); P.brainP = q; P.toBrain = P.water + (wet ? max(s - .25, 0.) : 0.); }
     }
-    if (wet){ wy += (p.y + .5*d.y*tEnd)*tEnd; P.water += tEnd; }
+    if (wet){ wy += (p.y + .5*d.y*tEnd)*tEnd; if (P.wLen == 0.){ P.wO = p; P.wD = d; P.wLen = tEnd; } P.water += tEnd; }
     p += d*tEnd;
     if (tS < tWall){
       vec3 ns = swellNormal(p.xz);
@@ -370,6 +416,7 @@ bool traceBowl(vec3 ro, vec3 rd, float ng, float nw, out Path P){
       continue;
     }
     // out through the back wall
+    P.wallP = p;
     d = bend(d, -p/R_IN, nm/ng, dummy);
     float tg = sph(p, d, R_OUT).y;
     P.glass += tg;
@@ -411,6 +458,13 @@ void main(){
     // light from the room, bent by the whole jar (the ball of water turns it upside down)
     float behindRoom = studio(P.exitDir)[c]*uBrainBehind;
     float v = b[c]/uScale + (1. - b.a)*behindRoom;
+    if (b.a > 0.){
+      // the waves focus the lamp into a moving net of light on the brain's upper side
+      float cau = causticAt(P.brainP)[c];
+      float up = smoothstep(uBrainPos.y - .25, uBrainPos.y + .35, P.brainP.y);
+      v *= mix(1., .55 + .45*cau, uCaustics*up);
+      v += uLampCol[c]*cau*.05*uCaustics*up*b.a;
+    }
     // glass is faintly green: long paths through it, at the edges, take on its colour
     v *= exp(-P.glass*vec3(2.2, .55, 1.6)[c]*uGlassTint);
     v *= P.keep;
@@ -423,25 +477,38 @@ void main(){
     vec2 guv = G.uv.x < 0. ? vec2(-1.) : G.uv;
     vec3 bloom = guv.x < 0. ? vec3(0.) :
       (soft(guv, L - 6.3).rgb*.36 + soft(guv, L - 5.3).rgb*.34 + soft(guv, L - 4.3).rgb*.26 + soft(guv, L - 3.3).rgb*.14)/uScale*uPulse;
-    // sunlight nets over the brain, strongest on its upper side
-    vec2 bsp = (guv - .5)*vec2(uRes.x/uRes.y, 1.)*uView;
-    float net = caustics(bsp*.9 + vec2(.13, .0), uTime*.55);
-    inner *= 1. + net*1.4*smoothstep(-.5, .6, bsp.y)*cover;
     inner += bloom*(1. - .85*cover)*G.keep*uBloom;
 
     float wet = mix(G.water, G.toBrain, cover);      // the brain hides the water behind it
     if (G.water > 0.){
-      // water takes the red out of what is seen through it (Beer-Lambert), and lends its own colour
-      vec3 through = exp(-wet*vec3(.35, .12, .10)*.6*uClarity);
+      // Beer-Lambert: each colour fades with the distance travelled through water; the water adds its own dim glow
+      vec3 sigma = -log(max(uWaterTint, vec3(1e-3)))*uClarity;
       float lift = smoothstep(-.95, SEA, G.waterY);                    // 0 at the bottom, 1 at the surface
-      vec3 body = mix(DEEPSEA, SHALLOW, lift*lift*lift);
-      body *= .45 + .55*smoothstep(1., .35, length(sp - vec2(0., .1)));   // the sides of the ball sit in shadow
-      // shafts of light slanting down from the surface
-      float sx = sp.x*7. + sp.y*1.6;
-      float shafts = pow(.5 + .5*sin(sx + uTime*.35)*sin(sx*2.3 - uTime*.5 + 1.7), 3.);
-      body *= 1. + 1.5*shafts*lift*uShafts;
-      body += glowCol*.06*uPulse*uWaterGlow;                                      // the brain lights the water round it                                              // the brain lights the water round it
-      inner = inner*through + body*(1. - exp(-wet*1.1))*.5*G.keep*uMurk;
+      inner = inner*exp(-sigma*wet)
+            + (uInscat*uMurk*(.35 + .65*lift) + glowCol*.03*uPulse*uWaterGlow)*(1. - exp(-wet*1.6))*G.keep;
+
+      // god rays: walk the ray through the water, gathering lamp light wherever the waves focus it
+      if (uRaySteps > 0 && G.wLen > 0.){
+        vec3 Lw = lightIn();
+        float len = min(mix(G.wLen, min(G.wLen, G.toBrain), cover), 2.);
+        float ds = len/float(uRaySteps);
+        float jit = hash(gl_FragCoord.xy + fract(uTime*7.31)*113.);
+        vec3 acc = vec3(0.);
+        for (int i = 0; i < 32; i++){
+          if (i >= uRaySteps) break;
+          float tr = (float(i) + jit)*ds;
+          vec3 q = G.wO + G.wD*tr;
+          float depth = SEA - q.y;
+          if (depth < 0.) continue;
+          vec2 bed = q.xz + Lw.xz*((q.y - CPLANE)/(-Lw.y));
+          vec3 cc = textureLod(uCaustic, clamp(bed*.5 + .5, 0., 1.), 2.2).rgb;
+          float shaft = pow(max(dot(cc, vec3(.333)) - .75, 0.), 1.4)*1.6 + .04;
+          acc += shaft*exp(-sigma*(depth/max(-Lw.y, .2) + tr))*ds;
+        }
+        inner += uLampCol*acc*.06*uGodRays*G.keep;
+      }
+      // the lamp's light pools in a net on the floor of the bowl
+      inner += uLampCol*causticAt(G.wallP)*.02*uCaustics*smoothstep(-.3, -.75, G.wallP.y)*exp(-sigma*G.water)*(1. - cover)*G.keep;
       // specks adrift and bubbles climbing
       float sparkle = motes(sp, 9., .05, 1.)*.5 + motes(sp, 17., .09, 2.)*.35 + motes(sp, 5.5, .16, 3.)*.9;
       // each beat sends a faint ring of light rolling out through the water
@@ -450,20 +517,21 @@ void main(){
       float front = max(ring(rr, uRipples.x), 0.) + .6*max(ring(rr, uRipples.y), 0.);
       vec3 hue = glowCol/max(max(glowCol.r, glowCol.g), 1e-4);          // the brain's colour, at full strength
       inner += hue*front*.09*uRipple*(1. - cover)*smoothstep(.3, .5, rr)*G.keep;
-      inner += mix(vec3(.55, .85, .9), uShallow*3., .5)*sparkle*.4*uMotes*(1. - .7*cover)*(.4 + .6*lift);
+      inner += (uLampCol*.25 + uInscat*6.)*sparkle*.4*uMotes*(1. - .7*cover)*(.4 + .6*lift);
     }
     if (G.surf > 0.){
-      float ripple = caustics(G.surfP.xz*1.3, uTime*.6);
+      float ripple = dot(causticAt(G.surfP - vec3(0., .3, 0.)), vec3(.333));
       if (G.tir > 0.){
         // seen from below at a steep angle the surface is a silver mirror: it shows the sea under it
-        inner += SHALLOW*(.35 + .9*ripple)*G.keep;
+        inner += (uInscat*10. + uLampCol*.02*ripple)*G.keep;
       } else if (G.surfD.y < 0.){
         // seen from above it mirrors the room
         float F = schlick(clamp(-dot(G.surfD, G.surfN), 0., 1.), .02);
-        inner = mix(inner, studio(reflect(G.surfD, G.surfN)), F) + vec3(.4, .75, .8)*ripple*.06;
+        vec3 R = reflect(G.surfD, G.surfN);
+        inner = mix(inner, studio(R), F) + uLampCol*pow(max(dot(R, -uLampDir), 0.), 900.)*6.;   // glints of the lamp
       } else {
         // a window up out of the water, rimmed with light
-        inner += vec3(.6, .9, 1.)*ripple*.12*G.keep;
+        inner += uLampCol*ripple*.05*G.keep;
       }
     }
   }
@@ -519,15 +587,109 @@ void main(){
 
   vec3 col = inner + front;
 
-  col = 1. - exp(-col*1.3*uExposure);
-  // the grade: filmic contrast, saturation, and a tint pressed into the shadows
+  col *= uScale;                                 // stored in range on devices without high-range targets
+  outColor = vec4(col, 1.);
+}
+</script>
+
+
+<!-- the finishing pass: filmic tone curve, grade, a little lens fringing, vignette and grain -->
+<script id="post-fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uImg;
+uniform vec2 uRes;
+uniform float uTime, uScale, uExposure, uContrast, uSat, uFringe, uVignette, uGrain;
+uniform vec3 uShadowTint;
+out vec4 outColor;
+vec3 aces(vec3 x){ return clamp(x*(2.51*x + .03)/(x*(2.43*x + .59) + .14), 0., 1.); }
+float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x*p.y); }
+void main(){
+  vec2 uv = gl_FragCoord.xy/uRes;
+  vec2 c = uv - .5; float r2 = dot(c, c);
+  vec2 off = c*r2*.02*uFringe;
+  vec3 col = vec3(texture(uImg, uv + off).r, texture(uImg, uv).g, texture(uImg, uv - off).b)/uScale;
+  col = aces(col*uExposure*.75);
   col = mix(col, col*col*(3. - 2.*col), uContrast);
   float luma = dot(col, vec3(.2126, .7152, .0722));
   col = max(mix(vec3(luma), col, uSat), 0.);
   col += uShadowTint*smoothstep(.004, .05, luma)*(1. - smoothstep(.05, .35, luma))*.1;   // true black stays black
+  col *= 1. - smoothstep(.12, .62, r2)*uVignette;
   col = pow(col, vec3(1./2.2));
-  col += (hash(gl_FragCoord.xy + fract(uTime)*61.) - .5)/255.;   // breaks up banding in the dark
+  float n = hash(gl_FragCoord.xy + fract(uTime)*61.) - .5;
+  col += n*(1./255. + uGrain*.035*smoothstep(.0, .08, luma));
   outColor = vec4(col, 1.);
+}
+</script>
+
+<!-- the ripple simulation (after Evan Wallace's WebGL Water): drops, then waves spreading cell to cell -->
+<script id="sim-drop-fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform vec2 uCenter; uniform float uRadius, uStrength;
+out vec4 outColor;
+void main(){
+  vec2 uv = gl_FragCoord.xy/vec2(textureSize(uTex, 0));
+  vec4 info = texture(uTex, uv);
+  float d = max(0., 1. - length(uCenter*.5 + .5 - uv)/uRadius);
+  info.r += (.5 - cos(d*3.14159)*.5)*uStrength;
+  outColor = info;
+}
+</script>
+<script id="sim-step-fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform float uRDisc, uDamp;
+out vec4 outColor;
+void main(){
+  vec2 size = vec2(textureSize(uTex, 0)), uv = gl_FragCoord.xy/size, dl = 1./size;
+  vec4 info = texture(uTex, uv);
+  float avg = (texture(uTex, uv - vec2(dl.x, 0.)).r + texture(uTex, uv + vec2(dl.x, 0.)).r
+             + texture(uTex, uv - vec2(0., dl.y)).r + texture(uTex, uv + vec2(0., dl.y)).r)*.25;
+  info.g += (avg - info.r)*2.;
+  info.g *= uDamp;
+  info.r += info.g;
+  info.r *= .998;
+  if (length(uv*2. - 1.) > uRDisc){ info.r = 0.; info.g = 0.; }   // the glass: waves bounce back off it
+  outColor = info;
+}
+</script>
+
+<!-- caustics: every point of the surface bends the lamp's light down onto a plane; where the light is
+     squeezed together it is brighter. One draw per colour, each with water's index for that colour. -->
+<script id="caustic-vs" type="x-shader/x-vertex">#version 300 es
+precision highp float;
+uniform float uTime;
+uniform int uGrid;
+uniform float uEta;
+uniform vec3 uLampDir;
+//WATER
+out vec2 vOld, vNew;
+out float vIn;
+const float CPLANE = -.05;
+void main(){
+  int cell = gl_VertexID/6, corner = gl_VertexID - cell*6;
+  int ci = cell - (cell/uGrid)*uGrid, cj = cell/uGrid;
+  ivec2 o = corner == 0 ? ivec2(0, 0) : corner == 1 ? ivec2(1, 0) : corner == 2 ? ivec2(0, 1)
+          : corner == 3 ? ivec2(1, 0) : corner == 4 ? ivec2(1, 1) : ivec2(0, 1);
+  vec2 p = (vec2(ci + o.x, cj + o.y)/float(uGrid)*2. - 1.)*uRDisc;
+  vIn = step(length(p), uRDisc);
+  vec3 N = waterN(p, 2);
+  vec3 P = vec3(p.x, waterH(p), p.y);
+  vec3 r = refract(uLampDir, N, uEta), rf = refract(uLampDir, vec3(0., 1., 0.), uEta);
+  vec3 hit = P + r*((P.y - CPLANE)/max(-r.y, .05));
+  vOld = p + rf.xz*((uSea - CPLANE)/(-rf.y));
+  vNew = hit.xz;
+  gl_Position = vec4(hit.x, hit.z, 0., 1.);
+}
+</script>
+<script id="caustic-fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform vec3 uChan;
+in vec2 vOld, vNew;
+in float vIn;
+out vec4 outColor;
+void main(){
+  float oldA = length(dFdx(vOld))*length(dFdy(vOld));
+  float newA = length(dFdx(vNew))*length(dFdy(vNew));
+  outColor = vec4(uChan*clamp(oldA/max(newA, 1e-9), 0., 6.)*vIn, 1.);
 }
 </script>
 
@@ -541,7 +703,7 @@ void main(){
 
   /* ---- programs */
   const src = id => document.getElementById(id).textContent;
-  const withStudio = s => s.replace('//STUDIO', src('studio'));
+  const withStudio = s => s.replace('//STUDIO', src('studio')).replace('//WATER', src('water'));
   function program(vs, fs){
     const p = gl.createProgram();
     for (const [type, text] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]){
@@ -556,7 +718,13 @@ void main(){
     return { p, u };
   }
   const brainProg = program(src('brain-vs'), withStudio(src('brain-fs')));
-  const sceneProg = program('#version 300 es\nvoid main(){ vec2 p = vec2(gl_VertexID == 1 ? 3. : -1., gl_VertexID == 2 ? 3. : -1.); gl_Position = vec4(p, 0., 1.); }', withStudio(src('scene-fs')));
+  const FULL = '#version 300 es\nvoid main(){ vec2 p = vec2(gl_VertexID == 1 ? 3. : -1., gl_VertexID == 2 ? 3. : -1.); gl_Position = vec4(p, 0., 1.); }';
+  const sceneProg = program(FULL, withStudio(src('scene-fs')));
+  const postProg = program(FULL, src('post-fs'));
+  const dropProg = program(FULL, src('sim-drop-fs'));
+  const stepProg = program(FULL, src('sim-step-fs'));
+  const causticProg = program(withStudio(src('caustic-vs')), src('caustic-fs'));
+  const emptyVao = gl.createVertexArray();
 
   /* ---- the model: 48 bytes a vertex (position, normal, uv, tangent, handedness), 16-bit triangles */
   let verts, tris, tissueImg, normalImg;
@@ -607,15 +775,42 @@ void main(){
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.bindFramebuffer(gl.FRAMEBUFFER, resFbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, specimen, 0);
+    gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, FORMAT, w, h, 0, gl.RGBA, hdr ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
   }
+  function target(w, h, mips){
+    const tex = gl.createTexture(), fbo = gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, FORMAT, w, h, 0, gl.RGBA, hdr ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mips ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    return { tex, fbo, w, h };
+  }
+  const sceneTex = gl.createTexture(), sceneFbo = gl.createFramebuffer();
+  gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const SIM = 256;
+  let simA = target(SIM, SIM, false), simB = target(SIM, SIM, false);   // the ripple simulation needs high range: off without it
+  const caustic = target(512, 512, true);
 
   /* ---- sizing: sharp, but never more pixels than the shader can comfortably fill */
-  const MAX_PIXELS = 2.6e6;
+  const QUALITY = { High:{ rays:24, oct:5, grid:200, pixels:2.6e6 }, Balanced:{ rays:12, oct:3, grid:140, pixels:1.8e6 }, Low:{ rays:0, oct:2, grid:0, pixels:1.1e6 } };
+  let quality = QUALITY.High;
   let W = 0, H = 0;
   function resize(){
     const cw = cv.clientWidth, ch = cv.clientHeight;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
-    dpr = Math.min(dpr, Math.sqrt(MAX_PIXELS/Math.max(1, cw*ch)));
+    dpr = Math.min(dpr, Math.sqrt(quality.pixels/Math.max(1, cw*ch)));
     const w = Math.max(1, Math.round(cw*dpr)), h = Math.max(1, Math.round(ch*dpr));
     if (w !== W || h !== H){ W = cv.width = w; H = cv.height = h; allocate(W, H); }
     draw();
@@ -656,20 +851,33 @@ void main(){
     },
     Sea: {
       level:[.73, .3, .85, .01],
-      surface:"#2c4a3e",
-      depths:"#030607",
-      murk:[1.7, 0, 4, .01],
-      clarity:[1.4, 0, 4, .01],          // higher = more of the brain's colour is absorbed
-      lightShafts:[.45, 0, 2, .01],
+      waterColour:"#a9cdc2",           // what survives a hand's width of water (darker = murkier)
+      clarity:[.7, 0, 4, .01],          // how strongly the water swallows colour with distance
+      glow:"#122522",                    // the water's own dim colour, seen where it is deep
+      murk:[1, 0, 4, .01],
+      waves:[.45, 0, 2, .01],            // the long rolling waves
+      chop:[.6, 0, 2, .01],              // the fine sharp chop on top
+      slosh:[.5, 0, 2, .01],             // the whole bowl rocking; tilting the jar sets it going
       particles:[.8, 0, 3, .01],
-      swell:[.7, 0, 3, .01],
       brainLightsWater:[.35, 0, 4, .01],
     },
+    Light: {
+      lamp:"#a9c6bd",                    // the cold lamp above the jar
+      strength:[1, 0, 4, .01],
+      caustics:[1, 0, 3, .01],           // the moving net of light the waves throw
+      godRays:[1, 0, 4, .01],
+    },
     Grade: {
-      exposure:[.9, .2, 3, .01],
-      contrast:[.45, 0, 1, .01],
-      saturation:[.72, 0, 1.6, .01],
+      exposure:[1.1, .2, 3, .01],
+      contrast:[.35, 0, 1, .01],
+      saturation:[.85, 0, 1.6, .01],
       shadowTint:"#123030",
+      lensFringe:[.6, 0, 3, .01],
+      vignette:[.5, 0, 1, .01],
+      grain:[.5, 0, 2, .01],
+    },
+    Quality: {
+      level:{ type:'select', options:['High', 'Balanced', 'Low'], default:'High' },
     },
   };
   const cfgDefaults = c => {
@@ -683,11 +891,12 @@ void main(){
     return o;
   };
   let P = cfgDefaults(cfg);
+  let ready = false;
   let raf = 0, last = 0;
   try {
     if (window.DialKit){
       DialKit.createDialRoot({ position:'top-right', theme:'dark', defaultOpen: innerWidth > 800 });
-      DialKit.createDialKit('Brain in a jar', cfg, { id:'brain-jar-v2', persist:true }).subscribe(v => { P = v; wake(); });
+      DialKit.createDialKit('Brain in a jar', cfg, { id:'brain-jar-v3', persist:true }).subscribe(v => { const q = QUALITY[v.Quality.level] || QUALITY.High; P = v; if (q !== quality){ quality = q; if (ready){ W = 0; resize(); } } wake(); });
     }
   } catch (e) { console.warn('Controls unavailable', e); }
   // colours from the panel are sRGB; the shaders work in linear light
@@ -724,6 +933,51 @@ void main(){
   /* ---- the heartbeat: a phase that advances with the tempo, so changing the speed never jumps */
   let time = 0, phase = 0;
   const ripples = [99, 99, 99];                    // seconds since each of the last three beats
+  const drops = [];                                // beats waiting to be dropped into the ripple simulation
+  let simClock = 0;
+
+  /* ---- the sea's long waves (Gerstner): fixed directions and lengths, amplitudes from the panel */
+  const WAVES = [.95, .72, .55, .43, .33, .26, .2, .15].map((l, i) => {
+    const ang = .62 + [0, .55, -.5, .95, -.85, .28, -.32, 1.25][i], k = 2*Math.PI/l;
+    return { dx:Math.cos(ang), dz:Math.sin(ang), k, a:.0185*Math.pow(l/.95, .8), w:Math.sqrt(2.7*k), p0:(i*2.399)%6.283 };
+  });
+  const waveBuf = new Float32Array(32), phaseBuf = new Float32Array(8);
+  /* ---- the slosh: the bowl's water rocks like a pendulum; tilting the jar pushes it */
+  const slosh = { x:0, vx:0, z:0, vz:0, lastRoll:0, lastPitch:0, rollV:0, pitchV:0 };
+  function stepSlosh(dt){
+    if (dt <= 0) return;
+    const rv = (tilt.roll - slosh.lastRoll)/dt, pv = (tilt.pitch - slosh.lastPitch)/dt;
+    const ra = (rv - slosh.rollV)/dt, pa = (pv - slosh.pitchV)/dt;
+    slosh.lastRoll = tilt.roll; slosh.lastPitch = tilt.pitch; slosh.rollV = rv; slosh.pitchV = pv;
+    const w = 4.2, z = .07, K = .0035;
+    slosh.vx += (-w*w*slosh.x - 2*z*w*slosh.vx + ra*K)*dt; slosh.x += slosh.vx*dt;
+    slosh.vz += (-w*w*slosh.z - 2*z*w*slosh.vz - pa*K)*dt; slosh.z += slosh.vz*dt;
+    slosh.x = Math.max(-.08, Math.min(.08, slosh.x)); slosh.z = Math.max(-.08, Math.min(.08, slosh.z));
+  }
+  const LAMP_DIR = (() => { const v = [.18, -.82, -.55], l = Math.hypot(...v); return v.map(x => x/l); })();
+  const rDisc = sea => Math.sqrt(Math.max(.986*.986 - sea*sea, 0));
+  function setWater(u, t){
+    const amp = P.Sea.waves;
+    WAVES.forEach((w, i) => { waveBuf.set([w.dx, w.dz, w.k, w.a*amp], i*4); phaseBuf[i] = w.w*t + w.p0; });
+    gl.uniform4fv(u['uWaves[0]'], waveBuf);
+    gl.uniform1fv(u['uWPhase[0]'], phaseBuf);
+    const a = .012*P.Sea.slosh;
+    gl.uniform4f(u.uSlosh, slosh.x + a*Math.sin(t*.61), slosh.z + a*.8*Math.sin(t*.47 + 1.2), a*.3*Math.sin(t*1.13), a*.3*Math.sin(t*.97 + .4));
+    gl.uniform1f(u.uDetailAmp, .011*P.Sea.chop);
+    gl.uniform1f(u.uRDisc, rDisc(P.Sea.level));
+    gl.uniform1f(u.uSimOn, hdr ? 1 : 0);
+    gl.uniform1i(u.uDetailOct, quality.oct);
+    gl.uniform1f(u.uSea, P.Sea.level);
+    gl.uniform1f(u.uTime, t);
+  }
+  function fullscreen(){ gl.bindVertexArray(emptyVao); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+  function simPass(prog, set){
+    gl.bindFramebuffer(gl.FRAMEBUFFER, simB.fbo); gl.viewport(0, 0, SIM, SIM);
+    gl.useProgram(prog.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, simA.tex); gl.uniform1i(prog.u.uTex, 0);
+    set(prog.u); fullscreen();
+    [simA, simB] = [simB, simA];
+  }
   function beatShape(ph){
     // two soft bumps (a beat and its echo); softness widens them until they melt into one swell
     const w = .035 + .17*P.Beat.softness;
@@ -736,7 +990,7 @@ void main(){
     phase += dt*P.Beat.bpm/60;
     const now = phase % 1;
     for (let i = 0; i < 3; i++) ripples[i] += dt;
-    if ((before < .15 && now >= .15) || (now < before && now >= .15)){ ripples.pop(); ripples.unshift(0); }
+    if ((before < .15 && now >= .15) || (now < before && now >= .15)){ ripples.pop(); ripples.unshift(0); drops.push(1); }
   }
 
   function draw(){
@@ -754,6 +1008,34 @@ void main(){
     const beat = beatShape(phase % 1);
     const pulse = 1 + P.Beat.strength*beat;
     const lights = [P.Jar.softboxLeft, P.Jar.windowRight, P.Jar.lampAbove, P.Jar.edgeLight];
+
+    // 0: the ripple simulation and the caustics, both driven by the same surface
+    if (hdr){
+      gl.disable(gl.BLEND);
+      const R = rDisc(P.Sea.level);
+      for (const _ of drops.splice(0)) simPass(dropProg, u => { gl.uniform2f(u.uCenter, brainPos[0], brainPos[2]); gl.uniform1f(u.uRadius, .045); gl.uniform1f(u.uStrength, .016*P.Ripples.height); });
+      let steps = 0;
+      while (simClock >= 1 && steps < 4){ simPass(stepProg, u => { gl.uniform1f(u.uRDisc, R); gl.uniform1f(u.uDamp, .993); }); simClock -= 1; steps++; }
+      if (steps === 4) simClock = 0;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, caustic.fbo); gl.viewport(0, 0, caustic.w, caustic.h);
+      const off = quality.grid === 0;
+      gl.clearColor(off ? .8 : 0, off ? .8 : 0, off ? .8 : 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+      if (!off){
+        gl.useProgram(causticProg.p);
+        const u = causticProg.u;
+        setWater(u, t);
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, simA.tex); gl.uniform1i(u.uSim, 1);
+        gl.uniform1i(u.uGrid, quality.grid); gl.uniform3fv(u.uLampDir, LAMP_DIR);
+        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+        gl.bindVertexArray(emptyVao);
+        [[[1, 0, 0], 1/1.331], [[0, 1, 0], 1/1.335], [[0, 0, 1], 1/1.343]].forEach(([chan, eta]) => {
+          gl.uniform3fv(u.uChan, chan); gl.uniform1f(u.uEta, eta);
+          gl.drawArrays(gl.TRIANGLES, 0, quality.grid*quality.grid*6);
+        });
+        gl.disable(gl.BLEND);
+      }
+      gl.bindTexture(gl.TEXTURE_2D, caustic.tex); gl.generateMipmap(gl.TEXTURE_2D);
+    }
 
     // 1: the brain
     gl.bindFramebuffer(gl.FRAMEBUFFER, msFbo);
@@ -789,11 +1071,13 @@ void main(){
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, specimen);
     gl.generateMipmap(gl.TEXTURE_2D);
 
-    // 3: the jar, the sea, the glow, and the final picture
+    // 3: the jar, the sea, the glow — in high range, into the scene texture
+    gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo);
+    gl.viewport(0, 0, W, H);
     gl.useProgram(sceneProg.p);
     u = sceneProg.u;
+    setWater(u, t);
     gl.uniform2f(u.uRes, W, H);
-    gl.uniform1f(u.uTime, t);
     gl.uniform1f(u.uView, view);
     gl.uniform3fv(u.uCamPos, camPos);
     gl.uniformMatrix3fv(u.uCam, false, cam);
@@ -803,21 +1087,35 @@ void main(){
     gl.uniformMatrix3fv(u.uJarInv, false, transpose(J));
     gl.uniform3fv(u.uBrainPos, brainPos);
     gl.uniform1f(u.uPulse, pulse); gl.uniform1f(u.uScale, SCALE);
-    gl.uniform1i(u.uSpecimen, 0);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, specimen); gl.uniform1i(u.uSpecimen, 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, simA.tex); gl.uniform1i(u.uSim, 1);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, caustic.tex); gl.uniform1i(u.uCaustic, 2);
     gl.uniformMatrix3fv(u.uCamInv, false, transpose(cam));
     gl.uniform2f(u.uProjUV, D/(view*W/H), D/view);
-    gl.uniform1f(u.uSea, P.Sea.level);
-    gl.uniform3fv(u.uShallow, lin(P.Sea.surface)); gl.uniform3fv(u.uDeep, lin(P.Sea.depths));
+    const lamp = lin(P.Light.lamp).map(x => x*P.Light.strength);
+    gl.uniform3fv(u.uWaterTint, lin(P.Sea.waterColour)); gl.uniform3fv(u.uInscat, lin(P.Sea.glow));
+    gl.uniform3fv(u.uLampCol, lamp); gl.uniform3fv(u.uLampDir, LAMP_DIR);
     gl.uniform1f(u.uMurk, P.Sea.murk); gl.uniform1f(u.uClarity, P.Sea.clarity);
-    gl.uniform1f(u.uShafts, P.Sea.lightShafts); gl.uniform1f(u.uMotes, P.Sea.particles);
-    gl.uniform1f(u.uSwellAmp, P.Sea.swell); gl.uniform1f(u.uWaterGlow, P.Sea.brainLightsWater);
+    gl.uniform1f(u.uMotes, P.Sea.particles); gl.uniform1f(u.uWaterGlow, P.Sea.brainLightsWater);
+    gl.uniform1f(u.uCaustics, hdr ? P.Light.caustics : 0); gl.uniform1f(u.uGodRays, hdr ? P.Light.godRays : 0);
+    gl.uniform1i(u.uRaySteps, hdr ? quality.rays : 0);
     gl.uniform3fv(u.uRipples, ripples);
     gl.uniform1f(u.uRipple, P.Ripples.height); gl.uniform1f(u.uRippleSpeed, P.Ripples.speed);
     gl.uniform1f(u.uGlassRefl, P.Jar.reflections); gl.uniform1f(u.uGlassTint, P.Jar.glassTint);
     gl.uniform1f(u.uBloom, P.Brain.haloInWater); gl.uniform1f(u.uBrainBehind, P.Jar.roomThroughWater);
+    fullscreen();
+
+    // 4: the finishing pass, to the screen
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, W, H);
+    gl.useProgram(postProg.p);
+    u = postProg.u;
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneTex); gl.uniform1i(u.uImg, 0);
+    gl.uniform2f(u.uRes, W, H); gl.uniform1f(u.uTime, t); gl.uniform1f(u.uScale, SCALE);
     gl.uniform1f(u.uExposure, P.Grade.exposure); gl.uniform1f(u.uContrast, P.Grade.contrast);
     gl.uniform1f(u.uSat, P.Grade.saturation); gl.uniform3fv(u.uShadowTint, lin(P.Grade.shadowTint));
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.uniform1f(u.uFringe, P.Grade.lensFringe); gl.uniform1f(u.uVignette, P.Grade.vignette); gl.uniform1f(u.uGrain, P.Grade.grain);
+    fullscreen();
   }
 
   function frame(now){
@@ -826,6 +1124,7 @@ void main(){
     const k = still.matches ? 1 : 1 - Math.exp(-dt*5);
     if (!still.matches) advance(dt);
     tilt.roll += (tilt.troll - tilt.roll)*k; tilt.pitch += (tilt.tpitch - tilt.pitch)*k;
+    if (!still.matches){ stepSlosh(dt); simClock += dt*120*P.Ripples.speed; }
     draw();
     if (!still.matches) wake();
   }
@@ -836,6 +1135,7 @@ void main(){
   cv.addEventListener('webglcontextrestored', () => location.reload());
 
   new ResizeObserver(resize).observe(cv);
+  ready = true;
   resize();
   cv.classList.add('on');
   last = performance.now();
