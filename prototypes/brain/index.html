@@ -77,7 +77,7 @@ uniform mat3 uCamInv;
 uniform vec2 uProj;
 out vec3 vL, vW, vN, vT;
 out vec2 vUV;
-const vec3 SC = vec3(1.14, .985, .96);
+const vec3 SC = vec3(1.14, .985, .96)*.74;    // the water magnifies it back up
 void main(){
   vec3 w = uBrain*(aPos*SC) + uBrainPos;
   vL = aPos; vW = w; vUV = aUV;
@@ -254,14 +254,119 @@ float motes(vec2 p, float scale, float rise, float seed){
   float live = step(.62, hash(id + seed + 5.3));
   return smoothstep(.07, .0, length(f - o*.7))*live;
 }
-const vec3 SHALLOW = vec3(.008, .40, .58);
-const vec3 DEEPSEA = vec3(.0, .022, .13);
+const vec3 SHALLOW = vec3(.0, .36, .50);
+const vec3 DEEPSEA = vec3(.0, .012, .05);
 
 // one soft tap of a blurred copy of the brain
 vec4 soft(vec2 uv, float lod){
   vec2 px = exp2(lod)/uRes*.75;
   return (textureLod(uSpecimen, uv + px*vec2(1., 1.), lod) + textureLod(uSpecimen, uv + px*vec2(-1., 1.), lod)
         + textureLod(uSpecimen, uv + px*vec2(1., -1.), lod) + textureLod(uSpecimen, uv + px*vec2(-1., -1.), lod))*.25;
+}
+
+/* ---------- real optics for the bowl ----------
+   The bowl is two spheres (the glass's outer and inner faces). A ray is followed through each
+   face with Snell's law, separately for red, green and blue, since glass and water bend each
+   colour a little differently. Inside, it may meet the sea's surface (and be mirrored back down
+   when it strikes from below at a steep angle), passes the brain, and leaves through the back. */
+const float R_OUT = 1.0115, R_IN = .9885, BODY_TOP = .925;
+vec2 sph(vec3 o, vec3 d, float r){
+  float b = dot(o, d), c = dot(o, o) - r*r, h = b*b - c;
+  if (h < 0.) return vec2(-1.);
+  h = sqrt(h); return vec2(-b - h, -b + h);
+}
+// refract, or reflect when the light cannot get out (total internal reflection)
+vec3 bend(vec3 d, vec3 n, float eta, inout float tir){
+  vec3 t = refract(d, n, eta);
+  if (dot(t, t) < 1e-6){ tir = 1.; return reflect(d, n); }
+  return t;
+}
+float schlick(float cosi, float f0){ return f0 + (1. - f0)*pow(1. - cosi, 5.); }
+// where a point in the jar lands in the picture of the brain
+vec2 toUV(vec3 q){ vec3 pc = uCamInv*(q - uCamPos); return .5 + pc.xy/(-pc.z)*uProjUV; }
+
+struct Path {
+  vec2 uv;          // where the bent ray passes the brain, in the brain's picture
+  float glass;      // distance travelled inside glass
+  float water;      // distance travelled inside water
+  float toBrain;    // water travelled before reaching the brain
+  float waterY;     // height of the middle of the water stretch
+  vec3 exitDir;     // direction it leaves the jar in
+  float keep;       // light kept after the reflections at each face
+  float surf;       // 1 when the ray met the sea's surface
+  float tir;        // 1 when the surface mirrored it back down
+  vec3 surfP, surfN, surfD;
+};
+
+bool traceBowl(vec3 ro, vec3 rd, float ng, float nw, out Path P){
+  P = Path(vec2(-1.), 0., 0., 0., 0., rd, 1., 0., 0., vec3(0.), vec3(0., 1., 0.), rd);
+  vec2 h = sph(ro, rd, R_OUT);
+  if (h.x < 0.) return false;
+  vec3 p = ro + rd*h.x;
+  if (p.y > BODY_TOP) return false;                     // the neck is drawn by the glass walk
+  float dummy = 0.;
+  vec3 n = p/R_OUT;
+  P.keep *= 1. - schlick(-dot(rd, n), .04);
+  vec3 d = bend(rd, n, 1./ng, dummy);
+  vec2 hi = sph(p, d, R_IN);
+  if (hi.x <= 0.){                                       // grazing: the ray only skims through the glass
+    float tg = sph(p, d, R_OUT).y; P.glass = tg;
+    vec3 q = p + d*tg;
+    P.exitDir = bend(d, -q/R_OUT, ng, dummy);
+    return true;
+  }
+  P.glass = hi.x;
+  p += d*hi.x;
+  bool wet = p.y < SEA + swell(p.xz);
+  float nm = wet ? nw : 1.;
+  P.keep *= 1. - schlick(abs(dot(d, p/R_IN)), wet ? .004 : .04);
+  d = bend(d, p/R_IN, ng/nm, dummy);
+
+  float wy = 0.;
+  for (int seg = 0; seg < 3; seg++){
+    float tWall = sph(p, d, R_IN).y;
+    // the sea's surface, if this stretch crosses it in the right direction
+    float tS = 1e9;
+    if (abs(d.y) > 1e-4){
+      float t0 = (SEA - p.y)/d.y;
+      if (t0 > 1e-3 && t0 < tWall && ((wet && d.y > 0.) || (!wet && d.y < 0.))){
+        for (int k = 0; k < 3; k++){ vec3 q = p + d*t0; t0 += (SEA + swell(q.xz) - q.y)/d.y; }
+        if (t0 > 1e-3 && t0 < tWall) tS = t0;
+      }
+    }
+    float tEnd = min(tWall, tS);
+    // the brain: note where this stretch passes closest to it
+    if (P.uv.x < 0.){
+      float s = clamp(dot(uBrainPos - p, d), 0., tEnd);
+      vec3 q = p + d*s;
+      if (length(q - uBrainPos) < .8){ P.uv = toUV(q); P.toBrain = P.water + (wet ? max(s - .25, 0.) : 0.); }
+    }
+    if (wet){ wy += (p.y + .5*d.y*tEnd)*tEnd; P.water += tEnd; }
+    p += d*tEnd;
+    if (tS < tWall){
+      vec3 ns = swellNormal(p.xz);
+      P.surf = 1.; P.surfP = p; P.surfN = ns; P.surfD = d;
+      if (wet){
+        float tir = 0.;
+        d = bend(d, -ns, nw, tir);                       // water to air, or mirrored back down
+        if (tir > 0.) P.tir = 1.; else { wet = false; nm = 1.; P.keep *= 1. - schlick(abs(d.y), .02); }
+      } else {
+        P.keep *= 1. - schlick(-dot(d, ns), .02);
+        d = bend(d, ns, 1./nw, dummy);                   // air into water
+        wet = true; nm = nw;
+      }
+      continue;
+    }
+    // out through the back wall
+    d = bend(d, -p/R_IN, nm/ng, dummy);
+    float tg = sph(p, d, R_OUT).y;
+    P.glass += tg;
+    p += d*tg;
+    P.exitDir = bend(d, -p/R_OUT, ng, dummy);
+    break;
+  }
+  if (P.water > 0.) P.waterY = wy/P.water;
+  return true;
 }
 
 void main(){
@@ -272,61 +377,79 @@ void main(){
 
   // blur levels are picked by size on screen, so the glow looks the same at any resolution
   float L = log2(uRes.y/uView);                 // log2 of pixels per world unit
-  // seen through moving water, everything inside wavers a little
-  vec2 wob = .0022*vec2(sin(uv.y*46. + uTime*1.4) + sin(uv.y*17. - uTime*.9), cos(uv.x*41. + uTime*1.1));
-  uv += wob*smoothstep(1.02, .9, length(sp - vec2(0., .0)));
-  vec4 specimen = texture(uSpecimen, uv);
-  vec3 brain = specimen.rgb/uScale;
-  float cover = specimen.a;
-
-  // light bleeding off the brain: a tight bright fringe, a soft glow, and a faint veil in the liquid
-  vec3 bloom = soft(uv, L - 6.3).rgb*.36 + soft(uv, L - 5.3).rgb*.34 + soft(uv, L - 4.3).rgb*.20
-             + soft(uv, L - 3.3).rgb*.07 + soft(uv, L - 2.4).rgb*.015;
-  bloom /= uScale;
-
   vec3 glowCol = textureLod(uSpecimen, vec2(.5), L - 1.5).rgb/uScale;   // the brain's light, averaged
+
+  /* what is seen through the bowl, one colour at a time */
+  const vec3 NG = vec3(1.512, 1.518, 1.532);   // crown glass, red to blue
+  const vec3 NW = vec3(1.331, 1.335, 1.343);   // sea water, red to blue
+  vec3 inner = vec3(0.);
+  float cover = 0., insideBowl = 0.;
+  Path G;                                       // the green path, used for the water and the glow
+  for (int c = 0; c < 3; c++){
+    Path P;
+    if (!traceBowl(ro, rd, NG[c], NW[c], P)) continue;
+    insideBowl = 1.;
+    vec4 b = P.uv.x < 0. ? vec4(0.) : texture(uSpecimen, P.uv);
+    // light from the room, bent by the whole jar (the ball of water turns it upside down)
+    float behindRoom = studio(P.exitDir)[c];
+    float v = b[c]/uScale + (1. - b.a)*behindRoom;
+    // glass is faintly green: long paths through it, at the edges, take on its colour
+    v *= exp(-P.glass*vec3(2.2, .55, 1.6)[c]);
+    v *= P.keep;
+    inner[c] = v;
+    if (c == 1){ G = P; cover = b.a; }
+  }
+
+  if (insideBowl > 0.){
+    // the brain's own glow, softened by the water around it
+    vec2 guv = G.uv.x < 0. ? vec2(-1.) : G.uv;
+    vec3 bloom = guv.x < 0. ? vec3(0.) :
+      (soft(guv, L - 6.3).rgb*.30 + soft(guv, L - 5.3).rgb*.16 + soft(guv, L - 4.3).rgb*.05)/uScale;
+    // sunlight nets over the brain, strongest on its upper side
+    vec2 bsp = (guv - .5)*vec2(uRes.x/uRes.y, 1.)*uView;
+    float net = caustics(bsp*.9 + vec2(.13, .0), uTime*.55);
+    inner *= 1. + net*1.4*smoothstep(-.5, .6, bsp.y)*cover;
+    inner += bloom*(1. - .85*cover)*G.keep;
+
+    float wet = mix(G.water, G.toBrain, cover);      // the brain hides the water behind it
+    if (G.water > 0.){
+      // water takes the red out of what is seen through it (Beer-Lambert), and lends its own colour
+      vec3 through = exp(-wet*vec3(.75, .18, .10)*.6);
+      float lift = smoothstep(-.95, SEA, G.waterY);                    // 0 at the bottom, 1 at the surface
+      vec3 body = mix(DEEPSEA, SHALLOW, lift*lift*lift);
+      body *= .45 + .55*smoothstep(1., .35, length(sp - vec2(0., .1)));   // the sides of the ball sit in shadow
+      // shafts of light slanting down from the surface
+      float sx = sp.x*7. + sp.y*1.6;
+      float shafts = pow(.5 + .5*sin(sx + uTime*.35)*sin(sx*2.3 - uTime*.5 + 1.7), 3.);
+      body *= 1. + 1.5*shafts*lift;
+      body += glowCol*.02;                                              // the brain lights the water round it
+      inner = inner*through + body*(1. - exp(-wet*1.1))*.5*G.keep;
+      // specks adrift and bubbles climbing
+      float sparkle = motes(sp, 9., .05, 1.)*.5 + motes(sp, 17., .09, 2.)*.35 + motes(sp, 5.5, .16, 3.)*.9;
+      inner += vec3(.55, .85, .9)*sparkle*.4*(1. - .7*cover)*(.4 + .6*lift);
+    }
+    if (G.surf > 0.){
+      float ripple = caustics(G.surfP.xz*1.3, uTime*.6);
+      if (G.tir > 0.){
+        // seen from below at a steep angle the surface is a silver mirror: it shows the sea under it
+        inner += SHALLOW*(.35 + .9*ripple)*G.keep;
+      } else if (G.surfD.y < 0.){
+        // seen from above it mirrors the room
+        float F = schlick(clamp(-dot(G.surfD, G.surfN), 0., 1.), .02);
+        inner = mix(inner, studio(reflect(G.surfD, G.surfN)), F) + vec3(.4, .75, .8)*ripple*.06;
+      } else {
+        // a window up out of the water, rimmed with light
+        inner += vec3(.6, .9, 1.)*ripple*.12*G.keep;
+      }
+    }
+  }
+
+  /* the glass itself: reflections off every face, walked along the straight ray */
   vec3 front = vec3(0.), behind = vec3(0.);
   float trans = 1.;
-  // the water this ray passes through, and what its surface adds
-  float wet = 0., depthY = 0., skin = 0., under = 0.;
-  vec3 skinCol = vec3(0.);
-
-  // the jar lives inside this sphere
   float bb = dot(ro, rd), bc = dot(ro, ro) - 1.32*1.32, bh = bb*bb - bc;
   if (bh > 0.){
     float tIn = -bb - sqrt(bh), tOut = -bb + sqrt(bh), tMid = -bb;
-
-    // the sea fills the bowl up to SEA: find the stretch of this ray that is under water
-    float wh = bb*bb - (dot(ro, ro) - BOWL*BOWL);
-    if (wh > 0.){
-      float tA = -bb - sqrt(wh), tB = -bb + sqrt(wh);
-      tB = mix(tB, max(tA, tMid - .3), cover);            // the brain stops the ray
-      vec3 pA = ro + rd*tA, pB = ro + rd*tB;
-      bool inA = pA.y < SEA + swell(pA.xz), inB = pB.y < SEA + swell(pB.xz);
-      float t0 = tA, t1 = tB;
-      if (inA != inB){
-        // the ray breaks the surface: find where, following the swell
-        float tS = tA + (SEA - pA.y)/rd.y;
-        for (int k = 0; k < 3; k++){ vec3 q = ro + rd*tS; tS += (SEA + swell(q.xz) - q.y)/rd.y; }
-        tS = clamp(tS, tA, tB);
-        vec3 pS = ro + rd*tS, nS = swellNormal(pS.xz);
-        if (inB){
-          // looking down onto the sea: it mirrors the room, more so at a shallow angle
-          t0 = tS;
-          float F = .02 + .98*pow(1. - clamp(-dot(rd, nS), 0., 1.), 5.);
-          skin = F;
-          skinCol = studio(reflect(rd, nS))*.9 + vec3(.05, .12, .14);
-        } else {
-          // looking up at it from below: a bright, restless mirror
-          t1 = tS;
-          under = 1.;
-          float glint = pow(max(dot(reflect(rd, -nS), normalize(vec3(-.3, .9, .2))), 0.), 6.);
-          skinCol = SHALLOW*(1.6 + 5.*glint) + vec3(.5, .8, .85)*caustics(pS.xz*1.3, uTime*.6)*.5;
-        }
-      }
-      if (inA || inB){ wet = max(t1 - t0, 0.); depthY = (ro + rd*(t0 + t1)*.5).y; }
-    }
-    // walk through every glass surface the ray crosses
     float sgn = 1., t = max(tIn, 0.);
     int crossings = 0;
     for (int i = 0; i < 110; i++){
@@ -336,27 +459,24 @@ void main(){
         vec3 n = jarNormal(p);
         if (dot(n, rd) > 0.) n = -n;
         float ndv = clamp(-dot(n, rd), 0., 1.);
-        float F = .035 + .965*pow(1. - ndv, 5.);
+        float F = schlick(ndv, .04);
         vec3 r = reflect(rd, n);
         vec3 e = studio(r);
-        // the brain mirrored in the glass: follow the bounced ray to where it passes the brain,
-        // and take the colour the brain shows there (softened, as curved glass smears it)
+        // the brain mirrored in the glass
         vec3 toB = uBrainPos - p; float tb = dot(toB, r);
         vec3 mirrored = vec3(0.);
         if (tb > 0.){
-          vec3 pc = uCamInv*(p + r*tb - uCamPos);
-          vec2 muv = .5 + pc.xy/(-pc.z)*uProjUV;
-          float inside = dot(n, toB) > 0. ? 1. : .35;      // the inner faces see it best
-          mirrored = soft(muv, L - 5.).rgb/uScale*inside;
+          float inside = dot(n, toB) > 0. ? 1. : .35;
+          mirrored = soft(toUV(p + r*tb), L - 5.).rgb/uScale*inside;
         }
-        // amber light caught in the thick base and under the lip
-        float base = smoothstep(-.78, -.86, p.y)*smoothstep(.42, .36, length(p.xz)), rim = smoothstep(.93, 1.02, p.y);
-        vec3 caught = glowCol*(base*.10 + rim*.02)*(.4 + .6*(1. - ndv));
-        // the bright line where the sea meets the glass
-        float line = smoothstep(.022, .0, abs(p.y - SEA - swell(p.xz)))*step(length(p), 1.);
-        caught += vec3(.55, .85, .9)*line*.20;
-        float w = crossings < 2 ? 1. : .4;         // the far wall reads much fainter
-        vec3 add = trans*(w*(F*e + vec3(.55, .6, .66)*.008*pow(1. - ndv, 1.5)) + mirrored*F*.2 + caught);
+        // light caught in the thick base
+        float base = smoothstep(-.78, -.86, p.y)*smoothstep(.42, .36, length(p.xz));
+        vec3 caught = glowCol*base*.10*(.4 + .6*(1. - ndv));
+        // the bright line where the sea meets the glass (the meniscus)
+        float line = smoothstep(.018, .0, abs(p.y - SEA - swell(p.xz)))*step(length(p), 1.);
+        caught += vec3(.6, .9, .95)*line*.35;
+        float w = crossings < 2 ? 1. : .35;        // the far wall reads much fainter
+        vec3 add = trans*(w*F*e + mirrored*F*.2 + caught);
         if (t < tMid) front += add; else behind += add;
         trans *= (1. - F)*.985;
         crossings++;
@@ -367,31 +487,10 @@ void main(){
       }
       if (t > tOut) break;
     }
+    // outside the bowl's body (the neck, lip and foot), the glass is seen straight through
+    if (insideBowl < 1.) inner += behind;
+    else inner += behind*.3*(1. - cover);
   }
-
-  // sunlight nets over the brain, strongest on its upper side
-  float net = caustics(sp*.9 + vec2(.13, .0), uTime*.55);
-  brain *= 1. + net*1.8*smoothstep(-.5, .6, sp.y);
-
-  // everything inside the bowl, before the front glass is laid over it
-  vec3 inner = brain*mix(1., .93, cover) + bloom*(1. - .55*cover) + behind*(1. - cover);
-  if (wet > 0.){
-    // water takes the red out of what is seen through it, and adds its own colour
-    vec3 through = exp(-wet*vec3(.95, .26, .12)*.6);
-    float lift = smoothstep(-.95, SEA, depthY);                       // 0 at the bottom, 1 at the surface
-    vec3 body = mix(DEEPSEA, SHALLOW, lift*lift);
-    // shafts of light slanting down from the surface
-    float sx = sp.x*7. + sp.y*1.6;
-    float shafts = pow(.5 + .5*sin(sx + uTime*.35)*sin(sx*2.3 - uTime*.5 + 1.7), 3.);
-    body *= 1. + 1.5*shafts*lift;
-    body += glowCol*.05;                                              // the brain lights the water round it
-    inner = inner*through + body*(1. - exp(-wet*1.25))*1.15;
-    // specks adrift and bubbles climbing
-    float sparkle = motes(sp, 9., .05, 1.)*.5 + motes(sp, 17., .09, 2.)*.35 + motes(sp, 5.5, .16, 3.)*.9;
-    inner += vec3(.55, .85, .9)*sparkle*.45*(1. - .7*cover)*(.4 + .6*lift);
-    if (under > 0.) inner += skinCol*exp(-wet*.6)*(1. - cover);
-  }
-  if (skin > 0.) inner = mix(inner, skinCol, skin);
 
   vec3 col = inner + front;
 
