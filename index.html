@@ -1992,10 +1992,10 @@
       // soft (mode 8), matched to the owner's screen recording: a blurred band with film grain. Orange on top (lifting at the
       // sides), red-pink, purple, and two blue-purple pools along the bottom; pastel (washed with white); very soft edges.
       softThick:.68, softDip:.09, softLobe:.07, softFadeT:.3, softFadeB:.36, softWash:.24, softGrain:.07, softBlue:.62, softSway:.15,
-      // soft on desktop is the in-between itself, and has its own stretch of the page: it starts rising as the last orbit
-      // cards leave, travels up softSpeed× as fast as the page (tied 1:1 to the scroll, no easing of its own), fills the
-      // screen, and has cleared off the top before the work comes up. softCover: its height, × screen height.
-      softCover:1.5, softSpeed:1.5,
+      // soft on desktop is the bridge from the statement to the work: a band softCover × screen height tall that comes up
+      // as the last orbit cards leave and scrolls with the page, with the work starting right under its soft lower edge
+      // (softGap: extra space between them, × screen height). Tied directly to the scroll; no easing of its own.
+      softCover:.75, softSpeed:1, softGap:0,
       softRise:.16, softRiseScroll:1.6, softRiseIdle:0, softRiseSize:2.2, softRoll:.5,
       ripple:.043, rippleSpeed:.5, rippleScroll:1.5, flowRings:2.8, flowSpeed:.18, flowScroll:1, travelScroll:.5, settle:.6,
       stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'],
@@ -2150,10 +2150,10 @@
         if (isSoft){
           // its stretch: from the end of the orbit's exit; the work is moved down so it arrives just after the band clears
           const C = V.Choreography, sec = section.offsetTop, secEnd = sec + section.offsetHeight;
-          // it starts as the last cards leave
+          // it comes up as the last cards leave
           const g0 = sec + (C.heroOut*0.9 + C.statementIn + C.read + 0.1 + C.exit - 0.3)*vh, speed = Math.max(0.5, B.softSpeed);
           thick = Math.max(0.6, B.softCover)*vh;
-          const wkWant = g0 + (vh*0.55 + thick*(1 - B.softFadeB*0.5))/speed + vh;   // the work enters as the band's tail clears
+          const wkWant = g0 + vh + thick*(1 - B.softFadeB*0.5) + B.softGap*vh;     // the work starts where the band's colour ends
           const mt = Math.round(wkWant - secEnd) + 'px';
           if (worksEl.style.marginTop !== mt){ worksEl.style.marginTop = mt; requestAnimationFrame(measureSections); }
           sd = { g0, speed };
