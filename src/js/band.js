@@ -2,6 +2,7 @@
   // on a curved profile. The canvas sits IN the page (not fixed to the screen), so it scrolls exactly with the content on
   // every device, including phones' native scrolling, with nothing to catch up. It's only as tall as the band, draws only
   // the rows on screen, and redraws at most 30 times a second for the colour flow; off screen it does nothing.
+  const BAND_DEFAULT_MODE = 5;   // 5 Halftone (live). 7 is the sweep, drawn by sweep.js instead of this canvas
   (() => {
     const cv = document.getElementById('bandCv');
     const gl = cv && cv.getContext('webgl', { antialias:false, premultipliedAlpha:true, alpha:true });
@@ -18,7 +19,7 @@
       // and the outline morphs flat → curve → peak as it crosses the screen. 3 Pulse: rings of colour breathe out from a hot core.
       // 4 Swipe: the colours sweep across in a diagonal staircase. 5 Halftone: the band dissolves into growing dots at its edges
       // instead of a blur. 6 Stretch: thin and calm at rest, it swells and brightens with the speed of your scroll.
-      mode: 5 };   // Halftone, with the settings tuned in the preview
+      mode: BAND_DEFAULT_MODE };
     const FS = `
     precision highp float;
     uniform vec2 uRes, uVP; uniform float uDpr, uTop, uThickPx, uWave, uWaves, uFadeT, uFadeB, uGrain;
@@ -151,7 +152,7 @@
       syncPreview();
       const P = place();
       // on screen at all? (phones also wait for the hero to come in)
-      const on = (!P.list || centre.classList.contains('in')) && P.boxTop < y + vh && P.boxTop + P.boxH > y;
+      const on = modeNow() !== 7 && (!P.list || centre.classList.contains('in')) && P.boxTop < y + vh && P.boxTop + P.boxH > y;
       if (on !== shown){ shown = on; cv.style.visibility = on ? 'visible' : 'hidden'; }
       if (!on){ flP = flT; rpP = rpT; wvP = wvT; vel = 0; return; }
       // scroll speed, smoothed (0 at rest → 1 at a brisk scroll); only mode 6 reads it

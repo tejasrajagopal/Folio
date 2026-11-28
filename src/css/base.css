@@ -138,6 +138,9 @@
   /* work grid */
   /* the grid rises over the pinned stage; transparent so the orbit cards can land in its frames */
   /* the gradient band: a fixed WebGL layer that sweeps up between the statement and the work (over the stage, under the work) */
+  /* sweep (band mode 7): one full-screen layer over the content (its light side is transparent, so the next section shows
+     through as the colour passes), under the bars */
+  .sweep-cv{position:fixed;inset:0;width:100%;height:100%;z-index:160;pointer-events:none;visibility:hidden}
   .band-cv{position:absolute;left:0;top:0;width:100%;height:0;z-index:4;pointer-events:none;visibility:hidden}   /* placed in the page by JS: it scrolls with the content */
   .works{position:relative;z-index:5;margin-top:-25vh}   /* starts rising just as the last cards clear */
   .wg{display:grid;grid-template-columns:1fr 1fr}
