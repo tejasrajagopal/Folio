@@ -185,21 +185,34 @@
   .band-cv{position:absolute;left:0;top:0;width:100%;height:0;z-index:4;pointer-events:none;visibility:hidden}   /* placed in the page by JS: it scrolls with the content */
   .works{position:relative;z-index:5;margin-top:-25vh}   /* starts rising just as the last cards clear */
   .wg{display:grid;grid-template-columns:1fr 1fr}
-  .wcell{display:flex;flex-direction:column;align-items:center;gap:30px;padding:43px 3.7vw 33px;border-bottom:.5px solid var(--cellline)}
-  .wcell:nth-child(odd){border-right:.5px solid var(--cellline)}
+  /* --ln (lines) and --im (image) run 0 → 1 as a tile comes up the screen (set by JS; 1 without it) */
+  .wcell{--ln:1;--im:1;position:relative;display:flex;flex-direction:column;align-items:center;gap:30px;padding:43px 3.7vw 33px}
+  /* grid lines draw themselves: the bottom rule from the left, the divider from the top */
+  .wcell::after{content:"";position:absolute;left:0;right:0;bottom:0;height:.5px;background:var(--cellline);transform:scaleX(var(--ln));transform-origin:left;pointer-events:none}
+  .wcell:nth-child(odd)::before{content:"";position:absolute;top:0;bottom:0;right:0;width:.5px;background:var(--cellline);transform:scaleY(var(--ln));transform-origin:top;pointer-events:none}
   .wcell[hidden]{display:none}
-  .wframe{position:relative;width:100%;aspect-ratio:614/338;border:1px solid var(--wframe)}
+  /* the frame draws out from two opposite corners: top + left from the top-left, bottom + right from the bottom-right */
+  .wframe{position:relative;width:100%;aspect-ratio:614/338;border:1px solid transparent}
+  .wframe::before,.wframe::after{content:"";position:absolute;inset:-1px;pointer-events:none;border:0 solid var(--wframe)}
+  .wframe::before{border-top-width:1px;border-left-width:1px;clip-path:inset(0 calc((1 - var(--ln)) * 100%) calc((1 - var(--ln)) * 100%) 0)}
+  .wframe::after{border-bottom-width:1px;border-right-width:1px;clip-path:inset(calc((1 - var(--ln)) * 100%) 0 0 calc((1 - var(--ln)) * 100%))}
   .wframe .wimg{position:absolute;inset:0;overflow:hidden}
+  /* the picture resolves out of the gradient: the site's colours sit over it and clear, while it eases down to size */
+  .wframe .wimg::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:calc(1 - var(--im));
+    background:linear-gradient(180deg,#F8B58A 0%,#F28B7E 30%,#E88AA6 52%,#A98BD0 74%,#8F93DD 100%)}
+  .wframe .wimg img{opacity:calc(.25 + .75 * var(--im))}
+  .wframe .wimg{transform:scale(calc(1.04 - .04 * var(--im)));transform-origin:50% 60%}
+  .wtitle{opacity:var(--im)}
   .wframe img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s ease}
   @media (hover:hover) and (pointer:fine){ .wcell:hover .wframe img{transform:scale(1.02)} }
-  .wframe i{position:absolute;width:8px;height:8px;background:var(--whandle)}
+  .wframe i{position:absolute;width:8px;height:8px;background:var(--whandle);transform:scale(var(--ln))}
   /* handles sit just outside each corner, touching it diagonally */
   .wframe i:nth-of-type(1){top:-9px;left:-9px} .wframe i:nth-of-type(2){top:-9px;right:-9px}
   .wframe i:nth-of-type(3){bottom:-9px;left:-9px} .wframe i:nth-of-type(4){bottom:-9px;right:-9px}
   .wtitle{font-family:"JejuMyeongjo",serif;font-weight:400;font-size:26px;letter-spacing:-.03em;line-height:138%}
   .wempty{grid-column:1/-1;padding:120px 0;text-align:center;font-family:"Geist Mono",monospace;font-size:14px;color:color-mix(in srgb,var(--ink) 60%,transparent)}
   .works-end{height:200px}
-  @media (max-width:800px){ .wg{grid-template-columns:1fr} .wcell:nth-child(odd){border-right:0} }
+  @media (max-width:800px){ .wg{grid-template-columns:1fr} .wcell:nth-child(odd)::before{display:none} }
   /* dock */
   .dock{position:fixed;left:50%;bottom:77px;z-index:200;display:flex;align-items:stretch;height:60px;background:var(--bg);border:1px solid var(--wframe);
     transform:translate(-50%,12px);opacity:0;pointer-events:none;transition:opacity .3s var(--ease-out-expo),transform .4s var(--ease-out-expo)}
@@ -1928,10 +1941,15 @@
     // work cells: each one fades and rises in from below as it enters the screen (compositor-only: no filter)
     for (const cell of workCells){
       const top = cell._docTop - wy;
-      const k = easeOutQuint(clamp((cvh - top) / (cvh * 0.45)));       // 0 at the bottom edge → 1 a little way up
-      put(cell, 'opacity', q(k, 0.01).toFixed(2));
-      put(cell, 'transform', (k >= 1 || reduce) ? 'none' : `translateY(${((1-k)*48).toFixed(1)}px)`);
-      put(cell, 'willChange', (k >= 1 || k <= 0 || reduce) ? 'auto' : 'transform, opacity');   // a layer only while it moves
+      // the tile forms as it comes up the screen: first its lines draw (grid lines, then the frame out from two corners,
+      // the handles popping in), then the picture resolves out of the gradient and the title fades in
+      const p = reduce ? 1 : clamp((cvh - top) / (cvh * 0.62));
+      const ln = easeOutQuint(clamp(p / 0.6)), im = easeInOutCubic(clamp((p - 0.28) / 0.72)), k = easeOutQuint(clamp(p / 0.75));
+      const lq = q(ln, 0.01).toFixed(2), iq = q(im, 0.01).toFixed(2);
+      if (cell._ln !== lq){ cell._ln = lq; cell.style.setProperty('--ln', lq); }
+      if (cell._im !== iq){ cell._im = iq; cell.style.setProperty('--im', iq); }
+      put(cell, 'transform', (k >= 1 || reduce) ? 'none' : `translateY(${((1-k)*28).toFixed(1)}px)`);
+      put(cell, 'willChange', (k >= 1 || k <= 0 || reduce) ? 'auto' : 'transform');   // a layer only while it moves
     }
     // ---- dock + edge blur appear once the work is on screen
     // theme switch: away while scrolling down, dissolves back on the way up (6px of travel decides, so jitter doesn't flicker it)
@@ -1966,7 +1984,10 @@
       softCover:1.5, softUnder:.45,
       // soft motion, all pushed by the scroll (with a slow drift of its own): soft plumes of colour rise through the band,
       // the band itself travels up faster than the page, and its top edge rolls
-      softGoneAt:.45, softGoneOver:.45,   // desktop: gone once the work's top is softGoneAt of the way down the screen, fading over softGoneOver
+      softGoneAt:.45, softGoneOver:.45,
+      // desktop: once you scroll down into the gradient (the work softPullAt screens below the top), it carries you the rest of
+      // the way to the work on its own, over softPullTime seconds
+      softPull:1, softPullAt:1.0, softPullTime:1.25,   // desktop: gone once the work's top is softGoneAt of the way down the screen, fading over softGoneOver
       softRise:.16, softRiseScroll:1.6, softRiseIdle:.05, softRiseSize:2.2, softPar:.3, softRoll:.5,
       ripple:.043, rippleSpeed:.5, rippleScroll:1.5, flowRings:2.8, flowSpeed:.18, flowScroll:1, travelScroll:.5, settle:.6,
       stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'],
@@ -2138,7 +2159,7 @@
       return (L = { boxTop, boxH, dpr, H, list, pinned, top });
     }
 
-    let vel = 0, rsT = 0, rsP = 0, fadeO = 1;
+    let vel = 0, rsT = 0, rsP = 0, fadeO = 1, pulled = false;
     let shown = false, prevY = 0, lastT = 0, lastDraw = 0, flT = 0, flP = 0, rpT = 0, rpP = 0, wvT = 0, wvP = 0;
     function tick(now){
       requestAnimationFrame(tick);
@@ -2169,6 +2190,13 @@
         // the band travels up faster than the page: it starts lower than its place and catches up exactly as the work arrives
         const span = Math.max(1, secs.wkTop - (P.boxTop - vh)), left = Math.min(1, Math.max(0, (secs.wkTop - y) / span));
         set1('uTop', P.top - y + (reduce ? 0 : B.softPar*vh*left)); gl.scissor(0, 0, cv.width, cv.height);
+        // the pull: scrolling down into the gradient hands the rest of the way to the page (once per pass; scrolling back
+        // up above it re-arms it; never while a project is open or for reduced motion)
+        const pullY = secs.wkTop - B.softPullAt*vh;
+        if (y < pullY - vh*0.2) pulled = false;
+        else if (!pulled && B.softPull && lenis && !pvOpen && dy > 0 && y >= pullY && y < secs.wkTop - 8){
+          pulled = true; lenis.scrollTo(secs.wkTop, { duration: Math.max(0.3, B.softPullTime), easing: t => 1 - Math.pow(1 - t, 3), lock: true });   // lock: further wheel input during the pull doesn't cut it short
+        }
         // it dissolves as the work comes up, so nothing of it is left behind the work
         const o = Math.min(1, Math.max(0, ((secs.wkTop - y)/vh - B.softGoneAt) / Math.max(0.05, B.softGoneOver))), oq = Math.round(o*o*(3 - 2*o)*100)/100;
         if (oq !== fadeO){ fadeO = oq; cv.style.opacity = oq; }

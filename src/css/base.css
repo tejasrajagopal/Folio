@@ -144,21 +144,34 @@
   .band-cv{position:absolute;left:0;top:0;width:100%;height:0;z-index:4;pointer-events:none;visibility:hidden}   /* placed in the page by JS: it scrolls with the content */
   .works{position:relative;z-index:5;margin-top:-25vh}   /* starts rising just as the last cards clear */
   .wg{display:grid;grid-template-columns:1fr 1fr}
-  .wcell{display:flex;flex-direction:column;align-items:center;gap:30px;padding:43px 3.7vw 33px;border-bottom:.5px solid var(--cellline)}
-  .wcell:nth-child(odd){border-right:.5px solid var(--cellline)}
+  /* --ln (lines) and --im (image) run 0 → 1 as a tile comes up the screen (set by JS; 1 without it) */
+  .wcell{--ln:1;--im:1;position:relative;display:flex;flex-direction:column;align-items:center;gap:30px;padding:43px 3.7vw 33px}
+  /* grid lines draw themselves: the bottom rule from the left, the divider from the top */
+  .wcell::after{content:"";position:absolute;left:0;right:0;bottom:0;height:.5px;background:var(--cellline);transform:scaleX(var(--ln));transform-origin:left;pointer-events:none}
+  .wcell:nth-child(odd)::before{content:"";position:absolute;top:0;bottom:0;right:0;width:.5px;background:var(--cellline);transform:scaleY(var(--ln));transform-origin:top;pointer-events:none}
   .wcell[hidden]{display:none}
-  .wframe{position:relative;width:100%;aspect-ratio:614/338;border:1px solid var(--wframe)}
+  /* the frame draws out from two opposite corners: top + left from the top-left, bottom + right from the bottom-right */
+  .wframe{position:relative;width:100%;aspect-ratio:614/338;border:1px solid transparent}
+  .wframe::before,.wframe::after{content:"";position:absolute;inset:-1px;pointer-events:none;border:0 solid var(--wframe)}
+  .wframe::before{border-top-width:1px;border-left-width:1px;clip-path:inset(0 calc((1 - var(--ln)) * 100%) calc((1 - var(--ln)) * 100%) 0)}
+  .wframe::after{border-bottom-width:1px;border-right-width:1px;clip-path:inset(calc((1 - var(--ln)) * 100%) 0 0 calc((1 - var(--ln)) * 100%))}
   .wframe .wimg{position:absolute;inset:0;overflow:hidden}
+  /* the picture resolves out of the gradient: the site's colours sit over it and clear, while it eases down to size */
+  .wframe .wimg::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:calc(1 - var(--im));
+    background:linear-gradient(180deg,#F8B58A 0%,#F28B7E 30%,#E88AA6 52%,#A98BD0 74%,#8F93DD 100%)}
+  .wframe .wimg img{opacity:calc(.25 + .75 * var(--im))}
+  .wframe .wimg{transform:scale(calc(1.04 - .04 * var(--im)));transform-origin:50% 60%}
+  .wtitle{opacity:var(--im)}
   .wframe img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s ease}
   @media (hover:hover) and (pointer:fine){ .wcell:hover .wframe img{transform:scale(1.02)} }
-  .wframe i{position:absolute;width:8px;height:8px;background:var(--whandle)}
+  .wframe i{position:absolute;width:8px;height:8px;background:var(--whandle);transform:scale(var(--ln))}
   /* handles sit just outside each corner, touching it diagonally */
   .wframe i:nth-of-type(1){top:-9px;left:-9px} .wframe i:nth-of-type(2){top:-9px;right:-9px}
   .wframe i:nth-of-type(3){bottom:-9px;left:-9px} .wframe i:nth-of-type(4){bottom:-9px;right:-9px}
   .wtitle{font-family:"JejuMyeongjo",serif;font-weight:400;font-size:26px;letter-spacing:-.03em;line-height:138%}
   .wempty{grid-column:1/-1;padding:120px 0;text-align:center;font-family:"Geist Mono",monospace;font-size:14px;color:color-mix(in srgb,var(--ink) 60%,transparent)}
   .works-end{height:200px}
-  @media (max-width:800px){ .wg{grid-template-columns:1fr} .wcell:nth-child(odd){border-right:0} }
+  @media (max-width:800px){ .wg{grid-template-columns:1fr} .wcell:nth-child(odd)::before{display:none} }
   /* dock */
   .dock{position:fixed;left:50%;bottom:77px;z-index:200;display:flex;align-items:stretch;height:60px;background:var(--bg);border:1px solid var(--wframe);
     transform:translate(-50%,12px);opacity:0;pointer-events:none;transition:opacity .3s var(--ease-out-expo),transform .4s var(--ease-out-expo)}

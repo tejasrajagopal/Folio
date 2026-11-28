@@ -21,7 +21,10 @@
       softCover:1.5, softUnder:.45,
       // soft motion, all pushed by the scroll (with a slow drift of its own): soft plumes of colour rise through the band,
       // the band itself travels up faster than the page, and its top edge rolls
-      softGoneAt:.45, softGoneOver:.45,   // desktop: gone once the work's top is softGoneAt of the way down the screen, fading over softGoneOver
+      softGoneAt:.45, softGoneOver:.45,
+      // desktop: once you scroll down into the gradient (the work softPullAt screens below the top), it carries you the rest of
+      // the way to the work on its own, over softPullTime seconds
+      softPull:1, softPullAt:1.0, softPullTime:1.25,   // desktop: gone once the work's top is softGoneAt of the way down the screen, fading over softGoneOver
       softRise:.16, softRiseScroll:1.6, softRiseIdle:.05, softRiseSize:2.2, softPar:.3, softRoll:.5,
       ripple:.043, rippleSpeed:.5, rippleScroll:1.5, flowRings:2.8, flowSpeed:.18, flowScroll:1, travelScroll:.5, settle:.6,
       stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'],
@@ -193,7 +196,7 @@
       return (L = { boxTop, boxH, dpr, H, list, pinned, top });
     }
 
-    let vel = 0, rsT = 0, rsP = 0, fadeO = 1;
+    let vel = 0, rsT = 0, rsP = 0, fadeO = 1, pulled = false;
     let shown = false, prevY = 0, lastT = 0, lastDraw = 0, flT = 0, flP = 0, rpT = 0, rpP = 0, wvT = 0, wvP = 0;
     function tick(now){
       requestAnimationFrame(tick);
@@ -224,6 +227,13 @@
         // the band travels up faster than the page: it starts lower than its place and catches up exactly as the work arrives
         const span = Math.max(1, secs.wkTop - (P.boxTop - vh)), left = Math.min(1, Math.max(0, (secs.wkTop - y) / span));
         set1('uTop', P.top - y + (reduce ? 0 : B.softPar*vh*left)); gl.scissor(0, 0, cv.width, cv.height);
+        // the pull: scrolling down into the gradient hands the rest of the way to the page (once per pass; scrolling back
+        // up above it re-arms it; never while a project is open or for reduced motion)
+        const pullY = secs.wkTop - B.softPullAt*vh;
+        if (y < pullY - vh*0.2) pulled = false;
+        else if (!pulled && B.softPull && lenis && !pvOpen && dy > 0 && y >= pullY && y < secs.wkTop - 8){
+          pulled = true; lenis.scrollTo(secs.wkTop, { duration: Math.max(0.3, B.softPullTime), easing: t => 1 - Math.pow(1 - t, 3), lock: true });   // lock: further wheel input during the pull doesn't cut it short
+        }
         // it dissolves as the work comes up, so nothing of it is left behind the work
         const o = Math.min(1, Math.max(0, ((secs.wkTop - y)/vh - B.softGoneAt) / Math.max(0.05, B.softGoneOver))), oq = Math.round(o*o*(3 - 2*o)*100)/100;
         if (oq !== fadeO){ fadeO = oq; cv.style.opacity = oq; }
