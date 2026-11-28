@@ -1978,7 +1978,7 @@
   // on a curved profile. The canvas sits IN the page (not fixed to the screen), so it scrolls exactly with the content on
   // every device, including phones' native scrolling, with nothing to catch up. It's only as tall as the band, draws only
   // the rows on screen, and redraws at most 30 times a second for the colour flow; off screen it does nothing.
-  const BAND_DEFAULT_MODE = 5;   // 5 Halftone (live). 7 is the sweep, drawn by sweep.js instead of this canvas
+  const BAND_DEFAULT_MODE = 8;   // 8 Soft. (7 is the sweep, drawn by sweep.js instead of this canvas)
   (() => {
     const cv = document.getElementById('bandCv');
     const gl = cv && cv.getContext('webgl', { antialias:false, premultipliedAlpha:true, alpha:true, preserveDrawingBuffer:false });
