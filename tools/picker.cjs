@@ -7,6 +7,7 @@ const MODES = [
   ['Swipe', 'The colours sweep across the bars in a diagonal staircase.'],
   ['Halftone', 'No blur: the edges break into dots that grow until they merge into solid colour.'],
   ['Stretch', 'Thin and pale at rest; it swells and brightens with the speed of your scroll.'],
+  ['Haze', 'No shape: the screen fills with a pale wash of your colours, then clears in under a second while the next section rises out of it, blurred to sharp, leaving a glow along the bottom.'],
 ];
 // [key, label, min, max, step, default] — defaults mirror src/js/band.js
 const GROUPS = [
@@ -28,6 +29,14 @@ const GROUPS = [
     ['halfPitch', 'Dot size', 4, 24, 0.5, 6.5],
     ['fadeTop', 'Top dissolve', 0.05, 0.6, 0.01, 0.32],
     ['fadeBottom', 'Bottom dissolve', 0.05, 0.6, 0.01, 0.34],
+  ]],
+  ['Haze (style 7)', [
+    ['hazeFade', 'Clear time (s)', 0.2, 3, 0.01, 0.93],
+    ['hazeLead', 'Build-up scroll', 0.2, 2, 0.05, 0.9],
+    ['hazeTint', 'Colour strength', 0.1, 1, 0.01, 0.5],
+    ['hazeRise', 'Rise distance', 0, 0.8, 0.01, 0.37],
+    ['hazeBlur', 'Rise blur', 0, 30, 0.5, 14],
+    ['hazeFloor', 'Bottom glow', 0, 1, 0.01, 0.85],
   ]],
   ['Shape (same on desktop + phone)', [
     ['barsOn', 'Stepped bars', 0, 1, 1, 0],
@@ -69,7 +78,7 @@ const UI = `
       `<div class="r"><label for="bp-${k}">${l}</label><input type="range" id="bp-${k}" data-k="${k}" min="${a}" max="${b}" step="${st}"><output id="bpo-${k}"></output></div>`).join('')).join('')}
     <div class="row"><button type="button" id="bpg">Go to band</button><button type="button" id="bpc">Copy settings</button><button type="button" id="bpr">Reset</button></div>
     <textarea id="bpt" readonly hidden aria-label="Settings"></textarea>
-    <p>Preview only. Keys 1–6 switch the style. Settings are kept in this browser.</p>
+    <p>Preview only. Keys 1–7 switch the style. Settings are kept in this browser.</p>
   </div>
 </div>
 <script>

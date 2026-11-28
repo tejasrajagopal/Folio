@@ -138,6 +138,12 @@
   /* work grid */
   /* the grid rises over the pinned stage; transparent so the orbit cards can land in its frames */
   /* the gradient band: a fixed WebGL layer that sweeps up between the statement and the work (over the stage, under the work) */
+  /* haze (band mode 7): a pale wash of the site's colours over the whole screen, and the glow it leaves along the bottom */
+  .haze,.haze-floor{position:fixed;left:0;right:0;pointer-events:none;opacity:0;visibility:hidden;--ht:50%}
+  .haze{top:0;bottom:0;z-index:180;   /* over all content (text has its own white glow that would punch through), under the bars */
+    background:linear-gradient(180deg,color-mix(in srgb,#F58E3F var(--ht),var(--bg)) 0%,color-mix(in srgb,#ED583E var(--ht),var(--bg)) 26%,color-mix(in srgb,#F06F8A var(--ht),var(--bg)) 50%,color-mix(in srgb,#8D5FB7 var(--ht),var(--bg)) 70%,color-mix(in srgb,#244EE7 var(--ht),var(--bg)) 100%)}
+  .haze-floor{bottom:0;height:38vh;z-index:180;
+    background:linear-gradient(to top,color-mix(in srgb,#8D5FB7 var(--ht),transparent) 0%,color-mix(in srgb,#F06F8A calc(var(--ht) * .7),transparent) 38%,color-mix(in srgb,#F58E3F 0%,transparent) 100%)}
   .band-cv{position:absolute;left:0;top:0;width:100%;height:0;z-index:4;pointer-events:none;visibility:hidden}   /* placed in the page by JS: it scrolls with the content */
   .works{position:relative;z-index:5;margin-top:-25vh}   /* starts rising just as the last cards clear */
   .wg{display:grid;grid-template-columns:1fr 1fr}
