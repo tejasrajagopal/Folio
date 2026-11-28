@@ -141,17 +141,23 @@ const UI = `
     const fall = () => { ta.hidden = false; ta.value = txt; ta.select(); done(false); };
     try { navigator.clipboard.writeText(txt).then(() => done(true), fall); } catch(e){ fall(); } });
   // phone view: the same page in a 393×852 frame (phone.html), so the phone layout runs as it would on a phone
-  const inFrame = window.self !== window.top;
+  // (the preview itself runs inside claude.ai's frame, so "am I framed" can't tell; the phone page marks itself)
+  const inFrame = !!window.FOLIO_PHONE || /phone\\.html$/.test(location.pathname);
   if (inFrame){ el.style.display = 'none'; return; }                 // inside the phone view the main panel drives it
   document.getElementById('bpm').addEventListener('click', () => {
     let o = document.getElementById('bpPhone');
     if (!o){
       o = document.createElement('div'); o.id = 'bpPhone';
-      o.innerHTML = '<div class="bpp-dev"><iframe src="phone.html" title="Phone view" width="393" height="852"></iframe></div>' +
+      o.innerHTML = '<div class="bpp-dev"><iframe title="Phone view" width="393" height="852"></iframe></div>' +
         '<div class="bpp-bar"><span>Phone · 393 × 852</span><button type="button" id="bppr">Reload</button><button type="button" id="bppx">Close</button></div>';
       document.body.appendChild(o);
       o.querySelector('#bppx').addEventListener('click', () => { o.hidden = true; document.documentElement.style.overflow = ''; });
-      o.querySelector('#bppr').addEventListener('click', () => { o.querySelector('iframe').src = 'phone.html?r=' + Date.now(); });
+      // the phone page is fetched and written into the frame (srcdoc): no separate page load for the host to block
+      const load = () => { const f = o.querySelector('iframe');
+        fetch('phone.html', { cache: 'no-store' }).then(r => { if (!r.ok) throw 0; return r.text(); })
+          .then(t => { f.srcdoc = t.replace('<head>', '<head><script>window.FOLIO_PHONE=1<\\/script>'); })
+          .catch(() => { f.src = 'phone.html'; }); };
+      o.querySelector('#bppr').addEventListener('click', load); load();
       const fit = () => o.style.setProperty('--s', Math.min(1, (innerHeight - 110) / 872, (innerWidth - 32) / 413).toFixed(3));
       addEventListener('resize', fit); fit();
     }
