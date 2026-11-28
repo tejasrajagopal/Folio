@@ -26,4 +26,8 @@ ${body}
 ${UI}
 `;
 fs.writeFileSync(process.argv[2], out);
+// phone.html: the same page as a standalone document, for the picker's phone view (published beside the page)
+const phone = path.join(path.dirname(process.argv[2]), 'phone.html');
+fs.writeFileSync(phone, '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n</head>\n<body>\n' + out + '</body>\n</html>\n');
+console.log('wrote', phone);
 console.log('wrote', process.argv[2], out.length, 'bytes; DialKit script removed:', !/DialKit \(~420/.test(out));

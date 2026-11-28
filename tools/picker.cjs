@@ -90,6 +90,13 @@ const UI = `
   #bp .r input{width:100%;accent-color:#F58E3F}
   #bp .r output{text-align:right;color:#8f8f94;font-variant-numeric:tabular-nums}
   #bp .row{display:flex;gap:4px;margin-top:8px} #bp .row button{justify-content:center;background:#2a2a2e;color:#eee}
+  #bpPhone{position:fixed;inset:0;z-index:6000;background:rgba(20,20,22,.72);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);--s:1}
+  #bpPhone[hidden]{display:none}
+  .bpp-dev{width:413px;height:872px;padding:10px;border-radius:52px;background:#111;box-shadow:0 30px 80px rgba(0,0,0,.45);transform:scale(var(--s));transform-origin:center;margin:calc((var(--s) - 1) * 436px) 0}
+  .bpp-dev iframe{display:block;width:393px;height:852px;border:0;border-radius:42px;background:#fff}
+  .bpp-bar{display:flex;align-items:center;gap:8px;font:11px/1 ui-monospace,Menlo,monospace;color:#eee;text-transform:uppercase;letter-spacing:.06em}
+  .bpp-bar button{background:#2a2a2e;color:#eee;border:0;border-radius:6px;padding:8px 12px;font:inherit;cursor:pointer}
   #bp textarea{width:100%;height:70px;margin-top:6px;background:#0e0e10;color:#cfcfcf;border:1px solid #333;border-radius:6px;font:10px/1.4 ui-monospace,Menlo,monospace;padding:6px}
 </style>
 <div id="bp" role="group" aria-label="Band motion (preview only)">
@@ -101,6 +108,7 @@ const UI = `
       `<div class="r"><label for="bp-${k}">${l}</label><input type="range" id="bp-${k}" data-k="${k}" min="${a}" max="${b}" step="${st}"><output id="bpo-${k}"></output></div>`).join('')).join('')}
     <div class="row"><button type="button" id="bpg">Go to band</button><button type="button" id="bpc">Copy settings</button><button type="button" id="bpr">Reset</button></div>
     <div class="row"><button type="button" id="bpw">Replay the work drawing</button></div>
+    <div class="row" id="bpmRow"><button type="button" id="bpm">Phone view</button></div>
     <textarea id="bpt" readonly hidden aria-label="Settings"></textarea>
     <p>Preview only. Keys 1–8 switch the style. Settings are kept in this browser.</p>
   </div>
@@ -109,7 +117,10 @@ const UI = `
 (() => {
   const M = ${JSON.stringify(MODES)}, G = ${JSON.stringify(GROUPS)}, el = document.getElementById('bp'), F = window.FOLIO_BAND;
   const D = {}; G.forEach(g => g[1].forEach(r => D[r[0]] = r[5]));
-  const save = () => { try { localStorage.setItem('bandMode4', F.mode); localStorage.setItem('bandParams', JSON.stringify(F.p)); } catch(e){} };
+  const save = () => { try { localStorage.setItem('bandMode4', F.mode); localStorage.setItem('bandParams', JSON.stringify(F.p)); } catch(e){}
+    // the phone view follows this panel live
+    const fr = document.querySelector('#bpPhone iframe'), T = fr && fr.contentWindow && fr.contentWindow.FOLIO_BAND;
+    if (T){ T.mode = F.mode; T.p = Object.assign({}, F.p); T.rev = (T.rev || 0) + 1; } };
   const fmt = (v, st) => st >= 1 ? String(Math.round(v)) : (+v).toFixed(st < 0.01 ? 3 : 2);
   const setMode = n => { F.mode = n; F.rev++; save();
     el.querySelectorAll('[data-m]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.m === n)));
@@ -129,6 +140,23 @@ const UI = `
     const done = ok => { cb.textContent = ok ? 'Copied' : 'Copy below'; setTimeout(() => cb.textContent = 'Copy settings', 1500); };
     const fall = () => { ta.hidden = false; ta.value = txt; ta.select(); done(false); };
     try { navigator.clipboard.writeText(txt).then(() => done(true), fall); } catch(e){ fall(); } });
+  // phone view: the same page in a 393×852 frame (phone.html), so the phone layout runs as it would on a phone
+  const inFrame = window.self !== window.top;
+  if (inFrame){ el.style.display = 'none'; return; }                 // inside the phone view the main panel drives it
+  document.getElementById('bpm').addEventListener('click', () => {
+    let o = document.getElementById('bpPhone');
+    if (!o){
+      o = document.createElement('div'); o.id = 'bpPhone';
+      o.innerHTML = '<div class="bpp-dev"><iframe src="phone.html" title="Phone view" width="393" height="852"></iframe></div>' +
+        '<div class="bpp-bar"><span>Phone · 393 × 852</span><button type="button" id="bppr">Reload</button><button type="button" id="bppx">Close</button></div>';
+      document.body.appendChild(o);
+      o.querySelector('#bppx').addEventListener('click', () => { o.hidden = true; document.documentElement.style.overflow = ''; });
+      o.querySelector('#bppr').addEventListener('click', () => { o.querySelector('iframe').src = 'phone.html?r=' + Date.now(); });
+      const fit = () => o.style.setProperty('--s', Math.min(1, (innerHeight - 110) / 872, (innerWidth - 32) / 413).toFixed(3));
+      addEventListener('resize', fit); fit();
+    }
+    o.hidden = false; document.documentElement.style.overflow = 'hidden';
+  });
   if (innerWidth < 700) el.classList.add('min');
   sync(); setMode(F.mode);
 })();

@@ -8,7 +8,7 @@ const TYPES = { '.html':'text/html; charset=utf-8', '.js':'text/javascript', '.c
 const { HEAD, UI } = require('./picker.cjs');
 http.createServer((req, res) => {
   let p = path.normalize(decodeURIComponent(req.url.split('?')[0])); if (p.endsWith(path.sep) || p === '/') p = path.join(p, 'index.html');
-  const f = path.join(ROOT, p);
+  const f = path.join(ROOT, p === path.sep + 'phone.html' ? 'index.html' : p);   // phone.html: the same page, framed by the picker's phone view
   if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()){ res.writeHead(404); res.end('not found'); return; }
   const type = TYPES[path.extname(f)] || 'application/octet-stream';
   if (f === path.join(ROOT, 'index.html')){
