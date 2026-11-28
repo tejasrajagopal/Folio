@@ -1950,7 +1950,7 @@
   const BAND_DEFAULT_MODE = 5;   // 5 Halftone (live). 7 is the sweep, drawn by sweep.js instead of this canvas
   (() => {
     const cv = document.getElementById('bandCv');
-    const gl = cv && cv.getContext('webgl', { antialias:false, premultipliedAlpha:true, alpha:true });
+    const gl = cv && cv.getContext('webgl', { antialias:false, premultipliedAlpha:true, alpha:true, preserveDrawingBuffer:false });
     if (!gl) return;
     const B = { thickness:.78, wave:.055, waves:1, lobes:.015, fadeTop:.32, fadeBottom:.34, blur:120, grain:.43,   // blur + grain: the Figma layer blur (120) and mono noise (white, 43%)
       pitch:6, dotSize:1.6, density:.62, dotOpacity:.85, tilt:8,
@@ -1961,6 +1961,9 @@
       // soft (mode 8), matched to the owner's screen recording: a blurred band with film grain. Orange on top (lifting at the
       // sides), red-pink, purple, and two blue-purple pools along the bottom; pastel (washed with white); very soft edges.
       softThick:.68, softDip:.09, softLobe:.07, softFadeT:.3, softFadeB:.36, softWash:.24, softGrain:.07, softBlue:.62, softSway:.15,
+      // soft on desktop is the in-between itself: taller than the screen (softCover × screen height), with its lower edge
+      // tucked softUnder × screen height behind the first row of work, so no white shows above or below it mid-scroll
+      softCover:1.5, softUnder:.45,
       ripple:.043, rippleSpeed:.5, rippleScroll:1.5, flowRings:2.8, flowSpeed:.18, flowScroll:1, travelScroll:.5, settle:.6,
       stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'],
       // how it moves. 1 Flow: colour layers drift through the band (the original). 2 Rise: bars grow up from the middle outward
@@ -2101,11 +2104,16 @@
         thick = Math.max(120, Math.min(avail, thickW*vw)); top = from + Math.max(0, (avail - thick)/2);
       } else {
         // desktop: it leads the work up the page, its trailing edge just over the work's top edge
-        thick = Math.min(thickW*vw, vh*0.9); top = secs.wkTop - thick*(1 - fadeB*0.6) + vh*0.05;
+        if (isSoft){ thick = Math.max(0.6, B.softCover)*vh; top = secs.wkTop + B.softUnder*vh - thick; }
+        else { thick = Math.min(thickW*vw, vh*0.9); top = secs.wkTop - thick*(1 - fadeB*0.6) + vh*0.05; }
       }
       const pad = bob + 4, boxTop = Math.round(top - up - pad), boxH = Math.round(thick + reach + 2*pad);
-      const dpr = Math.min(1.25, devicePixelRatio || 1), W = Math.round(vw*dpr), H = Math.round(boxH*dpr);
-      cv.style.top = boxTop + 'px'; cv.style.height = boxH + 'px';
+      // Soft on desktop is taller than the screen, so its canvas is pinned to the screen (one screen tall) and the band is
+      // drawn at its scrolled position each frame; desktop scrolling is driven from this same frame loop, so it stays in step.
+      // Everything else keeps a canvas in the page, exactly the band's size, which scrolls natively.
+      const pinned = isSoft && !list;
+      const dpr = Math.min(1.25, devicePixelRatio || 1), W = Math.round(vw*dpr), H = Math.round((pinned ? vh : boxH)*dpr);
+      cv.style.position = pinned ? 'fixed' : ''; cv.style.top = (pinned ? 0 : boxTop) + 'px'; cv.style.height = (pinned ? vh : boxH) + 'px';
       if (cv.width !== W || cv.height !== H){ cv.width = W; cv.height = H; }
       gl.viewport(0, 0, W, H);
       gl.uniform2f(U.uRes, W, H); gl.uniform2f(U.uVP, vw, vh); set1('uDpr', dpr); set1('uTop', top - boxTop); set1('uThickPx', thick); set1('uCurvePx', curvePx); set1('uBarW', vw / Math.max(4, B.bars));
@@ -2113,7 +2121,7 @@
       // edges at least as soft as the Figma layer blur
       const soft = modeNow() === 5 ? 0 : Math.min(0.45, (B.blur*2) / Math.max(1, thick));
       set1('uFadeT', isSoft ? B.softFadeT : Math.max(B.fadeTop, soft)); set1('uFadeB', isSoft ? B.softFadeB : Math.max(B.fadeBottom, soft));
-      return (L = { boxTop, boxH, dpr, H, list });
+      return (L = { boxTop, boxH, dpr, H, list, pinned, top });
     }
 
     let vel = 0;
@@ -2135,15 +2143,18 @@
       if (!reduce){ flT += dy*B.flowScroll*0.6 + dt*B.flowSpeed; rpT += dy*B.rippleScroll*4 + dt*B.rippleSpeed*2; wvT += dy*B.travelScroll*0.5; }
       const k = 1 - Math.exp(-dt / B.settle);
       flP += (flT - flP)*k; rpP += (rpT - rpP)*k; wvP += (wvT - wvP)*k;
-      if (now - lastDraw < 33 && lastDraw) return;                    // the flow is slow: 30 redraws a second is plenty
+      if (!P.pinned && now - lastDraw < 33 && lastDraw) return;      // a pinned canvas follows the scroll, so it draws every frame it's on screen                    // the flow is slow: 30 redraws a second is plenty
       lastDraw = now;
       set1('uRipPh', rpP); set1('uFlPh', flP); set1('uWvPh', wvP);
       set1('uMode', modeNow()); set1('uVel', reduce ? 1 : vel); set1('uHPh', rpP*B.halfPulseSpeed);
       set1('uProg', reduce ? 1 : Math.min(1, Math.max(0, (y + vh - P.boxTop) / (vh + P.boxH))));
       // only the rows that are on screen (plus a margin for scrolling between redraws)
-      const m = vh*0.4, r0 = Math.max(0, y - m - P.boxTop), r1 = Math.min(P.boxH, y + vh + m - P.boxTop);
-      const y0 = Math.max(0, Math.floor((P.boxH - r1)*P.dpr)), h = Math.min(P.H - y0, Math.ceil((r1 - r0)*P.dpr) + 2);
-      gl.scissor(0, y0, cv.width, Math.max(0, h));
+      if (P.pinned){ set1('uTop', P.top - y); gl.scissor(0, 0, cv.width, cv.height); }
+      else {
+        const m = vh*0.4, r0 = Math.max(0, y - m - P.boxTop), r1 = Math.min(P.boxH, y + vh + m - P.boxTop);
+        const y0 = Math.max(0, Math.floor((P.boxH - r1)*P.dpr)), h = Math.min(P.H - y0, Math.ceil((r1 - r0)*P.dpr) + 2);
+        gl.scissor(0, y0, cv.width, Math.max(0, h));
+      }
       gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
     addEventListener('resize', () => { sig = ''; });

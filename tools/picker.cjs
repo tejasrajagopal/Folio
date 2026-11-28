@@ -32,7 +32,9 @@ const GROUPS = [
     ['fadeBottom', 'Bottom dissolve', 0.05, 0.6, 0.01, 0.34],
   ]],
   ['Soft (style 8)', [
-    ['softThick', 'Thickness', 0.2, 1, 0.01, 0.68],
+    ['softCover', 'Height (desktop)', 0.6, 2.5, 0.01, 1.5],
+    ['softUnder', 'Tuck behind work', -0.2, 0.6, 0.01, 0.45],
+    ['softThick', 'Thickness (phone)', 0.2, 1, 0.01, 0.68],
     ['softDip', 'Top sag', 0, 0.2, 0.005, 0.09],
     ['softLobe', 'Bottom pools', 0, 0.15, 0.005, 0.07],
     ['softFadeT', 'Top softness', 0.05, 0.6, 0.01, 0.3],
