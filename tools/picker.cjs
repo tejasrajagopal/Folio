@@ -32,6 +32,12 @@ const GROUPS = [
     ['fadeBottom', 'Bottom dissolve', 0.05, 0.6, 0.01, 0.34],
   ]],
   ['Soft (style 8)', [
+    ['softRise', 'Rising plumes', 0, 0.5, 0.01, 0.16],
+    ['softRiseScroll', 'Rise from scroll', 0, 5, 0.05, 1.6],
+    ['softRiseIdle', 'Rise on its own', 0, 0.4, 0.01, 0.05],
+    ['softRiseSize', 'Plume size', 0.8, 6, 0.1, 2.2],
+    ['softPar', 'Faster than page', 0, 0.8, 0.01, 0.3],
+    ['softRoll', 'Top edge roll', 0, 2, 0.05, 0.5],
     ['softCover', 'Height (desktop)', 0.6, 2.5, 0.01, 1.5],
     ['softUnder', 'Tuck behind work', -0.2, 0.6, 0.01, 0.45],
     ['softThick', 'Thickness (phone)', 0.2, 1, 0.01, 0.68],

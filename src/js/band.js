@@ -19,6 +19,9 @@
       // soft on desktop is the in-between itself: taller than the screen (softCover × screen height), with its lower edge
       // tucked softUnder × screen height behind the first row of work, so no white shows above or below it mid-scroll
       softCover:1.5, softUnder:.45,
+      // soft motion, all pushed by the scroll (with a slow drift of its own): soft plumes of colour rise through the band,
+      // the band itself travels up faster than the page, and its top edge rolls
+      softRise:.16, softRiseScroll:1.6, softRiseIdle:.05, softRiseSize:2.2, softPar:.3, softRoll:.5,
       ripple:.043, rippleSpeed:.5, rippleScroll:1.5, flowRings:2.8, flowSpeed:.18, flowScroll:1, travelScroll:.5, settle:.6,
       stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'],
       // how it moves. 1 Flow: colour layers drift through the band (the original). 2 Rise: bars grow up from the middle outward
@@ -30,10 +33,12 @@
     precision highp float;
     uniform vec2 uRes, uVP; uniform float uDpr, uTop, uThickPx, uWave, uWaves, uFadeT, uFadeB, uGrain;
     uniform float uMode, uProg, uVel, uCurvePx, uHp, uHPulse, uHPh;
-    uniform float uSoftDip, uSoftLobe, uSoftWash, uSoftGrain, uSoftBlue, uSoftSway;
+    uniform float uSoftDip, uSoftLobe, uSoftWash, uSoftGrain, uSoftBlue, uSoftSway, uSoftRise, uSoftRisePh, uSoftRiseSize, uSoftRoll;
     uniform float uPitch, uDot, uDensity, uDotA, uBarW, uBars, uTilt, uRipple, uRipPh, uFlRings, uFlPh, uWvPh;
     uniform vec3 uS0, uS1, uS2, uS3, uS4;
     float hash(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }   // no sin(): stays random on every GPU
+    float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0 - 2.0*f);
+      return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
     vec3 ramp(float t){
       if (t < 0.2925) return mix(uS0, uS1, t/0.2925);
       if (t < 0.5147) return mix(uS1, uS2, (t-0.2925)/0.2222);
@@ -59,9 +64,16 @@
       if (IS(8.0)){
         // 8 Soft: the top edge lifts at the sides and sags in the middle; the bottom edge hangs in two pools
         float uu = px.x / uVP.x - 0.5;
-        float bt = uSoftDip*uVP.x*cos(6.2831853*uu);
+        float bt = uSoftDip*uVP.x*cos(6.2831853*(uu - uWvPh*uSoftRoll));      // the top edge rolls sideways as you scroll
         float bb = -uSoftLobe*uVP.x*cos(12.5663706*(uu - uWvPh*uSoftSway));
         float sv = (px.y - uTop - bt) / max(1.0, uThickPx + bb - bt);
+        // plumes: a soft, large-scale field that travels UP through the band pushes the colours around, so the bands of
+        // colour visibly rise as you scroll (two sizes, the smaller one faster; strongest in the middle of the band)
+        if (uSoftRise > 0.0){
+          vec2 q = vec2(uu*uSoftRiseSize*uVP.x/uVP.y, sv*uSoftRiseSize);
+          float n = vnoise(vec2(q.x, q.y + uSoftRisePh)) + 0.5*vnoise(vec2(q.x*2.1 + 7.3, q.y*2.1 + uSoftRisePh*1.7));
+          sv += uSoftRise * (n/1.5 - 0.5) * smoothstep(0.0, 0.25, sv) * (1.0 - smoothstep(0.75, 1.0, sv));
+        }
         float sa = smoothstep(0.0, uFadeT, sv) * (1.0 - smoothstep(1.0 - uFadeB, 1.0, sv));
         if (sa <= 0.0){ gl_FragColor = vec4(0.0); return; }
         vec3 bl = mix(uS3, uS4, uSoftBlue), sc;
@@ -118,7 +130,7 @@
     gl.useProgram(prog);
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    const U = {}; ['uRes','uVP','uSoftDip','uSoftLobe','uSoftWash','uSoftGrain','uSoftBlue','uSoftSway','uMode','uProg','uVel','uCurvePx','uHp','uHPulse','uHPh','uDpr','uTop','uThickPx','uWave','uWaves','uFadeT','uFadeB','uGrain','uPitch','uDot','uDensity','uDotA','uBarW','uBars','uTilt','uShapeH','uRipple','uRipPh','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
+    const U = {}; ['uRes','uVP','uSoftRise','uSoftRisePh','uSoftRiseSize','uSoftRoll','uSoftDip','uSoftLobe','uSoftWash','uSoftGrain','uSoftBlue','uSoftSway','uMode','uProg','uVel','uCurvePx','uHp','uHPulse','uHPh','uDpr','uTop','uThickPx','uWave','uWaves','uFadeT','uFadeB','uGrain','uPitch','uDot','uDensity','uDotA','uBarW','uBars','uTilt','uShapeH','uRipple','uRipPh','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
       .forEach(n => U[n] = gl.getUniformLocation(prog, n));
     const rgb = h => { const n = parseInt(h.slice(1), 16); return [(n>>16&255)/255, (n>>8&255)/255, (n&255)/255]; };
     B.stops.forEach((h, i) => gl.uniform3fv(U['uS'+i], rgb(h)));
@@ -129,6 +141,7 @@
       set1('uPitch', B.pitch); set1('uDot', B.dotSize); set1('uDensity', B.density); set1('uDotA', B.dotOpacity);
       set1('uTilt', B.tilt); set1('uBars', B.barsOn ? 1 : 0); set1('uRipple', B.ripple); set1('uFlRings', B.flowRings);
       set1('uHp', Math.max(3, B.halfPitch)); set1('uHPulse', B.halfPulse);
+      set1('uSoftRise', reduce ? 0 : B.softRise); set1('uSoftRiseSize', B.softRiseSize); set1('uSoftRoll', B.softRoll);
       set1('uSoftDip', B.softDip); set1('uSoftLobe', B.softLobe); set1('uSoftWash', B.softWash); set1('uSoftGrain', B.softGrain); set1('uSoftBlue', B.softBlue); set1('uSoftSway', B.softSway);
     };
     applyParams();
@@ -179,7 +192,7 @@
       return (L = { boxTop, boxH, dpr, H, list, pinned, top });
     }
 
-    let vel = 0;
+    let vel = 0, rsT = 0, rsP = 0;
     let shown = false, prevY = 0, lastT = 0, lastDraw = 0, flT = 0, flP = 0, rpT = 0, rpP = 0, wvT = 0, wvP = 0;
     function tick(now){
       requestAnimationFrame(tick);
@@ -191,20 +204,26 @@
       // on screen at all? (phones also wait for the hero to come in)
       const on = modeNow() !== 7 && (!P.list || centre.classList.contains('in')) && P.boxTop < y + vh && P.boxTop + P.boxH > y;
       if (on !== shown){ shown = on; cv.style.visibility = on ? 'visible' : 'hidden'; }
-      if (!on){ flP = flT; rpP = rpT; wvP = wvT; vel = 0; return; }
+      if (!on){ flP = flT; rpP = rpT; wvP = wvT; rsP = rsT; vel = 0; return; }
       // scroll speed, smoothed (0 at rest → 1 at a brisk scroll); only mode 6 reads it
       const sp = dt > 0 ? Math.min(1, Math.abs(dy)*vh / dt / 2200) : 0;
       vel += (sp - vel) * (1 - Math.exp(-dt / (sp > vel ? 0.12 : 0.45)));
+      if (!reduce) rsT += dy*B.softRiseScroll + dt*B.softRiseIdle;
       if (!reduce){ flT += dy*B.flowScroll*0.6 + dt*B.flowSpeed; rpT += dy*B.rippleScroll*4 + dt*B.rippleSpeed*2; wvT += dy*B.travelScroll*0.5; }
       const k = 1 - Math.exp(-dt / B.settle);
-      flP += (flT - flP)*k; rpP += (rpT - rpP)*k; wvP += (wvT - wvP)*k;
+      flP += (flT - flP)*k; rpP += (rpT - rpP)*k; wvP += (wvT - wvP)*k; rsP += (rsT - rsP)*k;
       if (!P.pinned && now - lastDraw < 33 && lastDraw) return;      // a pinned canvas follows the scroll, so it draws every frame it's on screen                    // the flow is slow: 30 redraws a second is plenty
       lastDraw = now;
       set1('uRipPh', rpP); set1('uFlPh', flP); set1('uWvPh', wvP);
       set1('uMode', modeNow()); set1('uVel', reduce ? 1 : vel); set1('uHPh', rpP*B.halfPulseSpeed);
       set1('uProg', reduce ? 1 : Math.min(1, Math.max(0, (y + vh - P.boxTop) / (vh + P.boxH))));
       // only the rows that are on screen (plus a margin for scrolling between redraws)
-      if (P.pinned){ set1('uTop', P.top - y); gl.scissor(0, 0, cv.width, cv.height); }
+      set1('uSoftRisePh', rsP);
+      if (P.pinned){
+        // the band travels up faster than the page: it starts lower than its place and catches up exactly as the work arrives
+        const span = Math.max(1, secs.wkTop - (P.boxTop - vh)), left = Math.min(1, Math.max(0, (secs.wkTop - y) / span));
+        set1('uTop', P.top - y + (reduce ? 0 : B.softPar*vh*left)); gl.scissor(0, 0, cv.width, cv.height);
+      }
       else {
         const m = vh*0.4, r0 = Math.max(0, y - m - P.boxTop), r1 = Math.min(P.boxH, y + vh + m - P.boxTop);
         const y0 = Math.max(0, Math.floor((P.boxH - r1)*P.dpr)), h = Math.min(P.H - y0, Math.ceil((r1 - r0)*P.dpr) + 2);
