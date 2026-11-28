@@ -38,6 +38,8 @@ const GROUPS = [
     ['softRiseSize', 'Plume size', 0.8, 6, 0.1, 2.2],
     ['softPar', 'Faster than page', 0, 0.8, 0.01, 0.3],
     ['softRoll', 'Top edge roll', 0, 2, 0.05, 0.5],
+    ['softGoneAt', 'Gone when work at', 0, 1, 0.01, 0.45],
+    ['softGoneOver', 'Fade length', 0.05, 1, 0.01, 0.45],
     ['softCover', 'Height (desktop)', 0.6, 2.5, 0.01, 1.5],
     ['softUnder', 'Tuck behind work', -0.2, 0.6, 0.01, 0.45],
     ['softThick', 'Thickness (phone)', 0.2, 1, 0.01, 0.68],
