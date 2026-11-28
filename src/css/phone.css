@@ -6,7 +6,7 @@
     .centre{gap:32px;width:min(362px,92vw)} .c-top{gap:48px} .c-text{gap:32px;width:281px} .c-name{gap:24px;width:281px}
     .sub{font-size:16px} .years{gap:8px} .years small{font-size:12px} .logos{width:281px;height:auto;font-size:12px} .cta{font-size:14px}
     .statement-text{font-size:21px;line-height:138%;text-align:justify;width:225px}
-    .wcell{padding:40px 6vw 32px;gap:22px} .wtitle{font-size:20px}
+    .wcell{--gx:6vw;padding:40px 6vw 32px;gap:22px} .wtitle{font-size:20px}
     .dock{bottom:16px;height:52px;max-width:94vw} .dock-logo{padding:0 12px} .dock-logo svg{width:44px}
     .dock-tabs{gap:6px;padding-right:8px} .dock-tabs button{font-size:14px;min-height:44px;padding:0 6px} .dock-cta{font-size:16px;padding:0 14px;white-space:nowrap}
     .edge-blur{height:150px}
@@ -35,7 +35,7 @@
   @keyframes cue{to{transform:translateY(250%)}}
   @media (prefers-reduced-motion: reduce){ .scroll-cue i::after{animation:none;display:none} }
   .m-list .works{margin-top:0}
-  .m-list .wcell{padding:30px 42px 22px;gap:18px}
+  .m-list .wcell{--gx:42px;padding:30px 42px 22px;gap:18px}
   .m-list .wtitle{font-size:16px}
   /* phones (Figma "iPhone 16 – 23"): a frosted bar at the bottom (Works · About · Get in touch) and the filters in a box at the top */
   .m-list .dock{bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(353px,calc(100vw - 32px));max-width:none;height:auto;gap:4px;padding:4px;

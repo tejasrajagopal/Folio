@@ -388,18 +388,6 @@
     statementEl.style.transform = `translate(-50%, calc(-50% + ${((1-easeOutQuint(stIn))*12 - easeInOutCubic(stOut)*16).toFixed(1)}px)) scale(${(1 + easeInOutCubic(stOut)*0.04).toFixed(4)})`;
     }
     // work cells: each one fades and rises in from below as it enters the screen (compositor-only: no filter)
-    for (const cell of workCells){
-      const top = cell._docTop - wy;
-      // the tile forms as it comes up the screen: first its lines draw (grid lines, then the frame out from two corners,
-      // the handles popping in), then the picture resolves out of the gradient and the title fades in
-      const p = reduce ? 1 : clamp((cvh - top) / (cvh * 0.62));
-      const ln = easeOutQuint(clamp(p / 0.6)), im = easeInOutCubic(clamp((p - 0.28) / 0.72)), k = easeOutQuint(clamp(p / 0.75));
-      const lq = q(ln, 0.01).toFixed(2), iq = q(im, 0.01).toFixed(2);
-      if (cell._ln !== lq){ cell._ln = lq; cell.style.setProperty('--ln', lq); }
-      if (cell._im !== iq){ cell._im = iq; cell.style.setProperty('--im', iq); }
-      put(cell, 'transform', (k >= 1 || reduce) ? 'none' : `translateY(${((1-k)*28).toFixed(1)}px)`);
-      put(cell, 'willChange', (k >= 1 || k <= 0 || reduce) ? 'auto' : 'transform');   // a layer only while it moves
-    }
     // ---- dock + edge blur appear once the work is on screen
     // theme switch: away while scrolling down, dissolves back on the way up (6px of travel decides, so jitter doesn't flicker it)
     const sdy = y - uiLastY;

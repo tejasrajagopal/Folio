@@ -105,6 +105,7 @@ const UI = `
     ${GROUPS.map(([g, rows]) => `<h4>${g}</h4>` + rows.map(([k, l, a, b, st]) =>
       `<div class="r"><label for="bp-${k}">${l}</label><input type="range" id="bp-${k}" data-k="${k}" min="${a}" max="${b}" step="${st}"><output id="bpo-${k}"></output></div>`).join('')).join('')}
     <div class="row"><button type="button" id="bpg">Go to band</button><button type="button" id="bpc">Copy settings</button><button type="button" id="bpr">Reset</button></div>
+    <div class="row"><button type="button" id="bpw">Replay the work drawing</button></div>
     <textarea id="bpt" readonly hidden aria-label="Settings"></textarea>
     <p>Preview only. Keys 1–8 switch the style. Settings are kept in this browser.</p>
   </div>
@@ -123,6 +124,8 @@ const UI = `
   el.querySelectorAll('[data-k]').forEach(i => i.addEventListener('input', () => { F.p[i.dataset.k] = +i.value; F.rev++; save(); document.getElementById('bpo-' + i.dataset.k).textContent = fmt(+i.value, +i.step); }));
   addEventListener('keydown', e => { const n = +e.key; if (n >= 1 && n <= M.length && !e.metaKey && !e.ctrlKey && e.target.tagName !== 'INPUT') setMode(n); });
   document.getElementById('bph').addEventListener('click', () => el.classList.toggle('min'));
+  document.getElementById('bpw').addEventListener('click', () => { const w = document.getElementById('works');
+    scrollTo({ top: w.offsetTop, behavior: 'instant' }); setTimeout(() => window.FOLIO_GRID_REPLAY && window.FOLIO_GRID_REPLAY(), 250); });
   document.getElementById('bpg').addEventListener('click', () => { const c = document.getElementById('bandCv');
     scrollTo({ top: Math.max(0, parseFloat(c.style.top) - innerHeight*0.55), behavior: 'smooth' }); });
   document.getElementById('bpr').addEventListener('click', () => { F.p = Object.assign({}, D); F.rev++; save(); sync(); });

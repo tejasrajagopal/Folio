@@ -185,31 +185,54 @@
   .band-cv{position:absolute;left:0;top:0;width:100%;height:0;z-index:4;pointer-events:none;visibility:hidden}   /* placed in the page by JS: it scrolls with the content */
   .works{position:relative;z-index:5;margin-top:-25vh}   /* starts rising just as the last cards clear */
   .wg{display:grid;grid-template-columns:1fr 1fr}
-  /* --ln (lines) and --im (image) run 0 → 1 as a tile comes up the screen (set by JS; 1 without it) */
-  .wcell{--ln:1;--im:1;position:relative;display:flex;flex-direction:column;align-items:center;gap:30px;padding:43px 3.7vw 33px}
-  /* grid lines draw themselves: the bottom rule from the left, the divider from the top */
-  .wcell::after{content:"";position:absolute;left:0;right:0;bottom:0;height:.5px;background:var(--cellline);transform:scaleX(var(--ln));transform-origin:left;pointer-events:none}
-  .wcell:nth-child(odd)::before{content:"";position:absolute;top:0;bottom:0;right:0;width:.5px;background:var(--cellline);transform:scaleY(var(--ln));transform-origin:top;pointer-events:none}
+  .wcell{--gx:3.7vw;position:relative;display:flex;flex-direction:column;align-items:center;gap:30px;padding:43px 3.7vw 33px}
+  /* grid lines (pseudo-elements so the first-view drawing can draw them in) */
+  .wcell::after{content:"";position:absolute;left:0;right:0;bottom:0;height:.5px;background:var(--cellline);transform-origin:left;pointer-events:none}
+  .wcell:nth-child(odd)::before{content:"";position:absolute;top:0;bottom:0;right:0;width:.5px;background:var(--cellline);transform-origin:top;pointer-events:none}
   .wcell[hidden]{display:none}
-  /* the frame draws out from two opposite corners: top + left from the top-left, bottom + right from the bottom-right */
-  .wframe{position:relative;width:100%;aspect-ratio:614/338;border:1px solid transparent}
-  .wframe::before,.wframe::after{content:"";position:absolute;inset:-1px;pointer-events:none;border:0 solid var(--wframe)}
-  .wframe::before{border-top-width:1px;border-left-width:1px;clip-path:inset(0 calc((1 - var(--ln)) * 100%) calc((1 - var(--ln)) * 100%) 0)}
-  .wframe::after{border-bottom-width:1px;border-right-width:1px;clip-path:inset(calc((1 - var(--ln)) * 100%) 0 0 calc((1 - var(--ln)) * 100%))}
+  .wframe{position:relative;width:100%;aspect-ratio:614/338;border:1px solid var(--wframe)}
   .wframe .wimg{position:absolute;inset:0;overflow:hidden}
-  /* the picture resolves out of the gradient: the site's colours sit over it and clear, while it eases down to size */
-  .wframe .wimg::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:calc(1 - var(--im));
-    background:linear-gradient(180deg,#F8B58A 0%,#F28B7E 30%,#E88AA6 52%,#A98BD0 74%,#8F93DD 100%)}
-  .wframe .wimg img{opacity:calc(.25 + .75 * var(--im))}
-  .wframe .wimg{transform:scale(calc(1.04 - .04 * var(--im)));transform-origin:50% 60%}
-  .wtitle{opacity:var(--im)}
   .wframe img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s ease}
   @media (hover:hover) and (pointer:fine){ .wcell:hover .wframe img{transform:scale(1.02)} }
-  .wframe i{position:absolute;width:8px;height:8px;background:var(--whandle);transform:scale(var(--ln))}
+  .wframe i{position:absolute;width:8px;height:8px;background:var(--whandle)}
   /* handles sit just outside each corner, touching it diagonally */
   .wframe i:nth-of-type(1){top:-9px;left:-9px} .wframe i:nth-of-type(2){top:-9px;right:-9px}
   .wframe i:nth-of-type(3){bottom:-9px;left:-9px} .wframe i:nth-of-type(4){bottom:-9px;right:-9px}
   .wtitle{font-family:"JejuMyeongjo",serif;font-weight:400;font-size:26px;letter-spacing:-.03em;line-height:138%}
+  /* ---- the first time the work is seen, the grid is set out like a drawing (JS adds .wg-pre, then .wg-go): construction
+     lines run past each frame, the grid lines draw, each frame is drawn from its corners while it settles to size, the
+     corner marks slide into place, grey placeholders hold the picture and the title, then the work fades in and the
+     construction lines go. Every state ends exactly where the plain grid is, so removing the classes is seamless. */
+  .wg-pre .wcell::after{transform:scaleX(0)} .wg-pre .wcell:nth-child(odd)::before{transform:scaleY(0)}
+  .wg-go .wcell::after,.wg-go .wcell:nth-child(odd)::before{transition:transform 1.3s cubic-bezier(.65,0,.35,1) calc(var(--d,0s) + .2s)}
+  .wg-pre .wframe,.wg-go .wframe{border-color:transparent}
+  .wg-pre .wframe::before,.wg-pre .wframe::after,.wg-go .wframe::before,.wg-go .wframe::after{content:"";position:absolute;inset:-1px;pointer-events:none;border:0 solid var(--wframe);z-index:1}
+  .wg-pre .wframe::before,.wg-go .wframe::before{border-top-width:1px;border-left-width:1px}
+  .wg-pre .wframe::after,.wg-go .wframe::after{border-bottom-width:1px;border-right-width:1px}
+  .wg-pre .wframe::before{clip-path:inset(0 100% 100% 0)} .wg-pre .wframe::after{clip-path:inset(100% 0 0 100%)}
+  .wg-go .wframe::before,.wg-go .wframe::after{clip-path:inset(0 0 0 0);transition:clip-path 1.2s cubic-bezier(.65,0,.35,1) calc(var(--d,0s) + .55s)}
+  .wg-pre .wframe{transform:scale(.93)}
+  .wg-go .wframe{transition:transform 1.9s cubic-bezier(.22,1,.36,1) calc(var(--d,0s) + .45s)}
+  .wg-pre .wframe i{opacity:0}
+  .wg-pre .wframe i:nth-of-type(1){transform:translate(-12px,-12px)} .wg-pre .wframe i:nth-of-type(2){transform:translate(12px,-12px)}
+  .wg-pre .wframe i:nth-of-type(3){transform:translate(-12px,12px)} .wg-pre .wframe i:nth-of-type(4){transform:translate(12px,12px)}
+  .wg-go .wframe i{transition:transform 1s cubic-bezier(.22,1,.36,1) calc(var(--d,0s) + 1.35s),opacity .35s ease calc(var(--d,0s) + 1.35s)}
+  .wg-pre .wimg img{opacity:0;transform:scale(1.03)}
+  .wg-go .wimg img{transition:opacity 1s ease calc(var(--d,0s) + 2.15s),transform 1.4s cubic-bezier(.22,1,.36,1) calc(var(--d,0s) + 2.15s)}
+  .wg-go .wimg::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:color-mix(in srgb,var(--ink) 5%,var(--bg)) linear-gradient(100deg,transparent 35%,color-mix(in srgb,var(--bg) 70%,transparent) 50%,transparent 65%) 0 0/250% 100% no-repeat;
+    animation:wgSkel 1.9s ease calc(var(--d,0s) + .95s) both,wgShine 1.3s linear calc(var(--d,0s) + .95s) infinite}
+  @keyframes wgSkel{0%{opacity:0}22%{opacity:1}70%{opacity:1}100%{opacity:0}}
+  @keyframes wgShine{from{background-position:100% 0}to{background-position:-60% 0}}
+  .wg-pre .wtitle{color:transparent;background-color:color-mix(in srgb,var(--ink) 7%,var(--bg));border-radius:4px;transform:translateY(20px)}
+  .wg-go .wtitle{background-color:transparent;border-radius:4px;
+    transition:transform 1.6s cubic-bezier(.22,1,.36,1) calc(var(--d,0s) + .6s),background-color .7s ease calc(var(--d,0s) + 2.25s),color .8s ease calc(var(--d,0s) + 2.35s)}
+  .wg-g{position:absolute;pointer-events:none;z-index:2;background:color-mix(in srgb,var(--ink) 24%,transparent);opacity:0}
+  .wg-g.h{height:.5px;left:calc(-1 * var(--gx));right:calc(-1 * var(--gx))} .wg-g.v{width:.5px;top:-43px;bottom:-110px}
+  .wg-g.t{top:-1px;transform-origin:left} .wg-g.b{bottom:-1px;transform-origin:right} .wg-g.l{left:-1px;transform-origin:top} .wg-g.r{right:-1px;transform-origin:bottom}
+  .wg-go .wg-g.h{animation:wgGuideH 2.6s cubic-bezier(.65,0,.35,1) var(--d,0s) both} .wg-go .wg-g.v{animation:wgGuideV 2.6s cubic-bezier(.65,0,.35,1) calc(var(--d,0s) + .12s) both}
+  @keyframes wgGuideH{0%{transform:scaleX(0);opacity:1}38%{transform:scaleX(1);opacity:1}72%{opacity:1}100%{transform:scaleX(1);opacity:0}}
+  @keyframes wgGuideV{0%{transform:scaleY(0);opacity:1}38%{transform:scaleY(1);opacity:1}72%{opacity:1}100%{transform:scaleY(1);opacity:0}}
   .wempty{grid-column:1/-1;padding:120px 0;text-align:center;font-family:"Geist Mono",monospace;font-size:14px;color:color-mix(in srgb,var(--ink) 60%,transparent)}
   .works-end{height:200px}
   @media (max-width:800px){ .wg{grid-template-columns:1fr} .wcell:nth-child(odd)::before{display:none} }
@@ -310,7 +333,7 @@
     .centre{gap:32px;width:min(362px,92vw)} .c-top{gap:48px} .c-text{gap:32px;width:281px} .c-name{gap:24px;width:281px}
     .sub{font-size:16px} .years{gap:8px} .years small{font-size:12px} .logos{width:281px;height:auto;font-size:12px} .cta{font-size:14px}
     .statement-text{font-size:21px;line-height:138%;text-align:justify;width:225px}
-    .wcell{padding:40px 6vw 32px;gap:22px} .wtitle{font-size:20px}
+    .wcell{--gx:6vw;padding:40px 6vw 32px;gap:22px} .wtitle{font-size:20px}
     .dock{bottom:16px;height:52px;max-width:94vw} .dock-logo{padding:0 12px} .dock-logo svg{width:44px}
     .dock-tabs{gap:6px;padding-right:8px} .dock-tabs button{font-size:14px;min-height:44px;padding:0 6px} .dock-cta{font-size:16px;padding:0 14px;white-space:nowrap}
     .edge-blur{height:150px}
@@ -339,7 +362,7 @@
   @keyframes cue{to{transform:translateY(250%)}}
   @media (prefers-reduced-motion: reduce){ .scroll-cue i::after{animation:none;display:none} }
   .m-list .works{margin-top:0}
-  .m-list .wcell{padding:30px 42px 22px;gap:18px}
+  .m-list .wcell{--gx:42px;padding:30px 42px 22px;gap:18px}
   .m-list .wtitle{font-size:16px}
   /* phones (Figma "iPhone 16 – 23"): a frosted bar at the bottom (Works · About · Get in touch) and the filters in a box at the top */
   .m-list .dock{bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(353px,calc(100vw - 32px));max-width:none;height:auto;gap:4px;padding:4px;
@@ -1939,18 +1962,6 @@
     statementEl.style.transform = `translate(-50%, calc(-50% + ${((1-easeOutQuint(stIn))*12 - easeInOutCubic(stOut)*16).toFixed(1)}px)) scale(${(1 + easeInOutCubic(stOut)*0.04).toFixed(4)})`;
     }
     // work cells: each one fades and rises in from below as it enters the screen (compositor-only: no filter)
-    for (const cell of workCells){
-      const top = cell._docTop - wy;
-      // the tile forms as it comes up the screen: first its lines draw (grid lines, then the frame out from two corners,
-      // the handles popping in), then the picture resolves out of the gradient and the title fades in
-      const p = reduce ? 1 : clamp((cvh - top) / (cvh * 0.62));
-      const ln = easeOutQuint(clamp(p / 0.6)), im = easeInOutCubic(clamp((p - 0.28) / 0.72)), k = easeOutQuint(clamp(p / 0.75));
-      const lq = q(ln, 0.01).toFixed(2), iq = q(im, 0.01).toFixed(2);
-      if (cell._ln !== lq){ cell._ln = lq; cell.style.setProperty('--ln', lq); }
-      if (cell._im !== iq){ cell._im = iq; cell.style.setProperty('--im', iq); }
-      put(cell, 'transform', (k >= 1 || reduce) ? 'none' : `translateY(${((1-k)*28).toFixed(1)}px)`);
-      put(cell, 'willChange', (k >= 1 || k <= 0 || reduce) ? 'auto' : 'transform');   // a layer only while it moves
-    }
     // ---- dock + edge blur appear once the work is on screen
     // theme switch: away while scrolling down, dissolves back on the way up (6px of travel decides, so jitter doesn't flicker it)
     const sdy = y - uiLastY;
@@ -2214,6 +2225,35 @@
     requestAnimationFrame(tick);
   })();
 
+  // ---- the work, the first time it's seen: once the grid is well on screen (after the gradient has passed) it is set out
+  // like a drawing over ~3s (styles: .wg-pre / .wg-go in base.css). Once per visit; not with reduced motion. Time-based:
+  // scrolling doesn't drive it. window.FOLIO_GRID_REPLAY() plays it again (the preview's picker uses it).
+  (() => {
+    const wg = $('worksGrid');
+    if (!wg || reduce || !('IntersectionObserver' in window)) return;
+    let seen = false; try { seen = sessionStorage.getItem('gridBuilt') === '1'; } catch(e){}
+    let t = 0;
+    function play(){
+      clearTimeout(t);
+      wg.classList.remove('wg-go'); wg.classList.add('wg-pre');
+      const cells = [...wg.querySelectorAll('.wcell:not([hidden])')];
+      cells.forEach((c, i) => {
+        c.style.setProperty('--d', (i*0.18).toFixed(2) + 's');
+        const im = c.querySelector('img[data-src]'); if (im && !im.getAttribute('src')) im.src = im.dataset.src;
+        const f = c.querySelector('.wframe');
+        if (f && !f.querySelector('.wg-g')) f.insertAdjacentHTML('beforeend', '<b class="wg-g h t"></b><b class="wg-g h b"></b><b class="wg-g v l"></b><b class="wg-g v r"></b>');
+      });
+      void wg.offsetWidth;                                             // start from the bare state
+      requestAnimationFrame(() => { wg.classList.remove('wg-pre'); wg.classList.add('wg-go'); });
+      t = setTimeout(() => { wg.classList.remove('wg-go'); wg.querySelectorAll('.wg-g').forEach(g => g.remove()); }, 3800 + cells.length*180);
+      try { sessionStorage.setItem('gridBuilt', '1'); } catch(e){}
+    }
+    window.FOLIO_GRID_REPLAY = play;
+    if (seen) return;
+    wg.classList.add('wg-pre');                                        // bare until it's seen
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)){ io.disconnect(); play(); } }, { rootMargin: '0px 0px -55% 0px' });
+    io.observe(wg);
+  })();
   // ---- sweep (band mode 7): the gradient as light rising through the screen, after the reference the owner shared.
   // A soft glow comes up from the bottom with a gently domed front (higher in the middle): the deepest colour leads, the
   // warm bright one follows, and behind it the page's own light floods up, pushing the colour off the top; the top
