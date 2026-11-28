@@ -30,7 +30,8 @@ const GROUPS = [
     ['fadeBottom', 'Bottom dissolve', 0.05, 0.6, 0.01, 0.34],
   ]],
   ['Shape (same on desktop + phone)', [
-    ['bars', 'Bars across', 8, 120, 1, 58],
+    ['barsOn', 'Stepped bars', 0, 1, 1, 0],
+    ['bars', 'Ripple count', 8, 120, 1, 58],
     ['curveW', 'Curve height', 0, 0.4, 0.005, 0.175],
     ['thickW', 'Thickness', 0.15, 0.9, 0.01, 0.29],
     ['tilt', 'Bar tilt', -30, 30, 0.5, 8],

@@ -1950,7 +1950,7 @@
     const B = { thickness:.78, wave:.055, waves:1, lobes:.015, fadeTop:.32, fadeBottom:.34, blur:120, grain:.43,   // blur + grain: the Figma layer blur (120) and mono noise (white, 43%)
       pitch:6, dotSize:1.6, density:.62, dotOpacity:.85, tilt:8,
       // shape, as shares of the screen WIDTH so desktop and phone get the same silhouette: bars across, curve height, thickness
-      bars:58, curveW:.175, thickW:.29,
+      bars:58, barsOn:0, curveW:.175, thickW:.29,   // barsOn 0: a smooth edge (`bars` then only sets how tight its ripple is)
       // halftone (mode 5): dot spacing in px, and a slow swell that travels through the dots at the dissolving edges
       halfPitch:6.5, halfPulse:.57, halfPulseSpeed:.95,
       ripple:.043, rippleSpeed:.5, rippleScroll:1.5, flowRings:2.8, flowSpeed:.18, flowScroll:1, travelScroll:.5, settle:.6,
@@ -1964,7 +1964,7 @@
     precision highp float;
     uniform vec2 uRes, uVP; uniform float uDpr, uTop, uThickPx, uWave, uWaves, uFadeT, uFadeB, uGrain;
     uniform float uMode, uProg, uVel, uCurvePx, uHp, uHPulse, uHPh;
-    uniform float uPitch, uDot, uDensity, uDotA, uBarW, uTilt, uRipple, uRipPh, uFlRings, uFlPh, uWvPh;
+    uniform float uPitch, uDot, uDensity, uDotA, uBarW, uBars, uTilt, uRipple, uRipPh, uFlRings, uFlPh, uWvPh;
     uniform vec3 uS0, uS1, uS2, uS3, uS4;
     float hash(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }   // no sin(): stays random on every GPU
     vec3 ramp(float t){
@@ -1975,14 +1975,21 @@
     }
     #define IS(n) (uMode > n - 0.5 && uMode < n + 0.5)
     float edgeA(float v){ return smoothstep(0.0, uFadeT, v) * (1.0 - smoothstep(1.0 - uFadeB, 1.0, v)); }
-    void main(){
-      vec2 px = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) / uDpr;      // CSS px inside the canvas
-      float bi = floor(px.x / uBarW), cx = (bi + 0.5)*uBarW, xr = px.x - cx, u = cx / uVP.x - 0.5, sc = min(uVP.y, uVP.x);
+    // How far the band's edge is pushed down at screen x (and u, the position across the screen, -0.5 … 0.5).
+    // Smooth by default: one continuous wavy curve. With bars on, the edge steps per bar and tilts within each one.
+    float bendAt(float x, out float u){
+      float bi = x / uBarW, xr = 0.0;
+      if (uBars > 0.5){ bi = floor(bi); float cx = (bi + 0.5)*uBarW; xr = x - cx; x = cx; }
+      u = x / uVP.x - 0.5;
       float au = clamp(abs(u)*2.0, 0.0, 1.0), curve = (1.0 - cos(3.14159265*au))*0.5, prof = curve;
       // 2 Rise: the outline morphs flat → curve → straight-sided peak as the band crosses the screen
       if (IS(2.0)) prof = mix(mix(0.0, curve, smoothstep(0.08, 0.42, uProg)), au, smoothstep(0.55, 0.9, uProg));
-      float bend = uCurvePx*prof + uWave*0.25*uVP.x*cos(6.2831853*uWaves*(u - uWvPh));
-      bend += uRipple*uVP.x*0.625*sin(bi*0.55 - uRipPh) + xr*tan(uTilt*0.0174533);
+      return uCurvePx*prof + uWave*0.25*uVP.x*cos(6.2831853*uWaves*(u - uWvPh))
+           + uRipple*uVP.x*0.625*sin(bi*0.55 - uRipPh) + xr*tan(uTilt*0.0174533);
+    }
+    void main(){
+      vec2 px = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) / uDpr;      // CSS px inside the canvas
+      float u, bend = bendAt(px.x, u), au = clamp(abs(u)*2.0, 0.0, 1.0);
       float v = (px.y - uTop - bend) / uThickPx, k = 1.0;
       // 2 Rise: each bar grows up from its foot, the middle first and the sides after
       if (IS(2.0)){ float h = clamp(uProg*3.2 - au*1.25, 0.0, 1.0); h = 1.0 - pow(1.0 - h, 3.0); k = max(h, 0.001); }
@@ -2003,7 +2010,7 @@
       if (IS(5.0)){
         // 5 Halftone: no blur at the edges; the band breaks into dots that grow until they merge into solid colour
         float hp = uHp; vec2 hc = (floor(px / hp) + 0.5)*hp;
-        float ac = edgeA((hc.y - uTop - (bend + (hc.x - px.x)*tan(uTilt*0.0174533))) / uThickPx);   // judged at the dot's centre, so every dot is round
+        float uc, ac = edgeA((hc.y - uTop - bendAt(hc.x, uc)) / uThickPx);   // judged at the dot's centre, so every dot is round
         // the dots at the dissolving edges swell and shrink in a slow travelling wave (solid colour stays solid)
         float sw = 1.0 + uHPulse*(1.0 - ac)*sin(hc.y/(hp*5.0) + hc.x/(hp*11.0) - uHPh);
         float cov = clamp((sqrt(ac)*hp*0.80*sw - length(px - hc))*uDpr + 0.5, 0.0, 1.0);
@@ -2024,7 +2031,7 @@
     gl.useProgram(prog);
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    const U = {}; ['uRes','uVP','uMode','uProg','uVel','uCurvePx','uHp','uHPulse','uHPh','uDpr','uTop','uThickPx','uWave','uWaves','uFadeT','uFadeB','uGrain','uPitch','uDot','uDensity','uDotA','uBarW','uTilt','uShapeH','uRipple','uRipPh','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
+    const U = {}; ['uRes','uVP','uMode','uProg','uVel','uCurvePx','uHp','uHPulse','uHPh','uDpr','uTop','uThickPx','uWave','uWaves','uFadeT','uFadeB','uGrain','uPitch','uDot','uDensity','uDotA','uBarW','uBars','uTilt','uShapeH','uRipple','uRipPh','uFlRings','uFlPh','uWvPh','uS0','uS1','uS2','uS3','uS4']
       .forEach(n => U[n] = gl.getUniformLocation(prog, n));
     const rgb = h => { const n = parseInt(h.slice(1), 16); return [(n>>16&255)/255, (n>>8&255)/255, (n&255)/255]; };
     B.stops.forEach((h, i) => gl.uniform3fv(U['uS'+i], rgb(h)));
@@ -2033,7 +2040,7 @@
     const applyParams = () => {
       set1('uWave', B.wave); set1('uWaves', B.waves); set1('uGrain', B.grain);
       set1('uPitch', B.pitch); set1('uDot', B.dotSize); set1('uDensity', B.density); set1('uDotA', B.dotOpacity);
-      set1('uTilt', B.tilt); set1('uRipple', B.ripple); set1('uFlRings', B.flowRings);
+      set1('uTilt', B.tilt); set1('uBars', B.barsOn ? 1 : 0); set1('uRipple', B.ripple); set1('uFlRings', B.flowRings);
       set1('uHp', Math.max(3, B.halfPitch)); set1('uHPulse', B.halfPulse);
     };
     applyParams();
