@@ -70,7 +70,13 @@
   .m-list .statement-text .st > span.g{background:linear-gradient(100deg,#F58E3F 0%,#ED583E 29%,#F06F8A 51%,#8D5FB7 63%,#244EE7 100%);
     -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
   /* the band runs behind the phone's text */
-  .m-list .m-intro{position:relative;z-index:5;padding-top:34vh}   /* room for the band between the hero and the statement */
+  .m-list .m-intro{position:relative;z-index:5;margin-top:12vh}   /* room for the band between the hero and the statement */
+  /* the statement, its line and "Scroll down for works" fill exactly one screen, centred; the page snaps to the hero, to that
+     screen and to the work, so one scroll from the statement lands on the work (the work list itself scrolls freely) */
+  .m-list .m-intro{min-height:100vh;min-height:100svh;justify-content:center;padding:24px 0;box-sizing:border-box}
+  html.m-list{scroll-snap-type:y mandatory}
+  .m-list .stage,.m-list .m-intro,.m-list .works{scroll-snap-align:start}
+  .m-list .m-intro,.m-list .works{scroll-snap-stop:always}
   /* phones: nothing may widen the page sideways. The text's soft glow reached 88px past each side of the 227px statement
      (≈403px), so the page could be dragged left and right. Trim the glows and clip any overflow on the x axis only. */
   .m-list .statement-text::before{inset:-48px -20px}

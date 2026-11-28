@@ -72,6 +72,14 @@ async function run(browser, base, name, opts){
   const all = await cells();
   check(name, 'work grid shows the three projects', all === 3, all + ' items');
   if (phone){
+    // the statement fills one screen and the page snaps: from the statement, one scroll lands on the work
+    const snapped = await ev(async () => { const it = document.getElementById('mIntro');
+      scrollTo(0, it.getBoundingClientRect().top + scrollY); await new Promise(r => setTimeout(r, 900));
+      const fits = Math.abs(it.getBoundingClientRect().height - innerHeight) < 2;
+      scrollBy(0, innerHeight*0.25); await new Promise(r => setTimeout(r, 1200));
+      return { fits, worksTop: Math.round(document.getElementById('works').getBoundingClientRect().top) }; });
+    check(name, 'phone: statement fills one screen; one scroll lands on the work', snapped.fits && Math.abs(snapped.worksTop) < 2, JSON.stringify(snapped));
+    await to(wk + 300);
     check(name, 'phone: filter bar is shown', await ev(() => document.getElementById('mTop').classList.contains('show')));
     const d = await ev(() => { const c = document.getElementById('dockCta').getBoundingClientRect(), k = document.getElementById('dock').getBoundingClientRect(); return { cta: Math.round(c.width), dockRight: k.right, vw: innerWidth }; });
     check(name, 'phone: bottom bar fits the screen', d.dockRight <= d.vw && d.cta === 160, JSON.stringify(d));
