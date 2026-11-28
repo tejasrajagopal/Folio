@@ -131,7 +131,7 @@
     },
     Scroll: {
       smooth:true,
-      lerp:[0.1,0.02,0.5,0.005],
+      lerp:[0.16,0.02,0.5,0.005],   // smooth-scroll catch-up per frame (higher = less trailing)   // smooth-scroll catch-up per frame (higher = less trailing)
       wheelMultiplier:[1,0.3,3,0.05],
     },
     Motion: {

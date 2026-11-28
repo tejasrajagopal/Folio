@@ -16,16 +16,11 @@
       // soft (mode 8), matched to the owner's screen recording: a blurred band with film grain. Orange on top (lifting at the
       // sides), red-pink, purple, and two blue-purple pools along the bottom; pastel (washed with white); very soft edges.
       softThick:.68, softDip:.09, softLobe:.07, softFadeT:.3, softFadeB:.36, softWash:.24, softGrain:.07, softBlue:.62, softSway:.15,
-      // soft on desktop is the in-between itself: taller than the screen (softCover × screen height), with its lower edge
-      // tucked softUnder × screen height behind the first row of work, so no white shows above or below it mid-scroll
-      softCover:1.5, softUnder:.45,
-      // soft motion, all pushed by the scroll (with a slow drift of its own): soft plumes of colour rise through the band,
-      // the band itself travels up faster than the page, and its top edge rolls
-      softGoneAt:.45, softGoneOver:.45,
-      // desktop: once you scroll down into the gradient (the work softPullAt screens below the top), it carries you the rest of
-      // the way to the work on its own, over softPullTime seconds
-      softPull:1, softPullAt:1.0, softPullTime:1.25,   // desktop: gone once the work's top is softGoneAt of the way down the screen, fading over softGoneOver
-      softRise:.16, softRiseScroll:1.6, softRiseIdle:.05, softRiseSize:2.2, softPar:.3, softRoll:.5,
+      // soft on desktop is the in-between itself, and has its own stretch of the page: it starts rising as the last orbit
+      // cards leave, travels up softSpeed× as fast as the page (tied 1:1 to the scroll, no easing of its own), fills the
+      // screen, and has cleared off the top before the work comes up. softCover: its height, × screen height.
+      softCover:1.5, softSpeed:1.5,
+      softRise:.16, softRiseScroll:1.6, softRiseIdle:0, softRiseSize:2.2, softRoll:.5,
       ripple:.043, rippleSpeed:.5, rippleScroll:1.5, flowRings:2.8, flowSpeed:.18, flowScroll:1, travelScroll:.5, settle:.6,
       stops:['#F58E3F','#ED583E','#F06F8A','#8D5FB7','#244EE7'],
       // how it moves. 1 Flow: colour layers drift through the band (the original). 2 Rise: bars grow up from the middle outward
@@ -155,20 +150,20 @@
     let rev = -1;
     const modeNow = () => { const pv = window.FOLIO_BAND; return (pv && pv.mode) || B.mode; };
     const syncPreview = () => { const pv = window.FOLIO_BAND; const r = pv ? (pv.rev || 0) + '|' + pv.mode : '';
-      if (pv && r !== rev){ rev = r; Object.assign(B, pv.p || {}); applyParams(); sig = ''; } };
+      if (pv && r !== rev){ rev = r; Object.assign(B, pv.p || {}); applyParams(); sig = ''; dirtyDraw = true; } };
     // ---- where the band sits in the page (document px); recomputed only when the layout changes
-    let L = null, sig = '';
+    let L = null, sig = '', dirtyDraw = true;
     function place(){
       const vh = innerHeight, vw = innerWidth, list = isList(V), sc0 = Math.min(vh, vw);
       const key = [vh, vw, list, secs.wkTop, secs.ctaBot, secs.stTop].join('|');
       if (key === sig && L) return L;
-      sig = key;
+      sig = key; dirtyDraw = true;
       const isSoft = modeNow() === 8;
       const curvePx = B.curveW*vw, bob = isSoft ? 0 : B.ripple*vw*0.625;
       // how far the shape reaches beyond its nominal top (up) and bottom (down)
       const up = isSoft ? Math.abs(B.softDip)*vw : 0, reach = isSoft ? (Math.abs(B.softDip) + Math.abs(B.softLobe))*vw : (B.wave + B.lobes)*vw + curvePx + bob;
       const thickW = isSoft ? B.softThick : B.thickW, fadeB = isSoft ? B.softFadeB : B.fadeBottom;
-      let top, thick;
+      let top, thick, sd = null;
       if (list){
         // phones: its own space between "Get in touch" and the statement (28px under the link, 32px above the statement);
         // the band keeps the same proportions as on desktop and sits in the middle of that space
@@ -176,8 +171,20 @@
         thick = Math.max(120, Math.min(avail, thickW*vw)); top = from + Math.max(0, (avail - thick)/2);
       } else {
         // desktop: it leads the work up the page, its trailing edge just over the work's top edge
-        if (isSoft){ thick = Math.max(0.6, B.softCover)*vh; top = secs.wkTop + B.softUnder*vh - thick; }
+        if (isSoft){
+          // its stretch: from the end of the orbit's exit; the work is moved down so it arrives just after the band clears
+          const C = V.Choreography, sec = section.offsetTop, secEnd = sec + section.offsetHeight;
+          // it starts as the last cards leave
+          const g0 = sec + (C.heroOut*0.9 + C.statementIn + C.read + 0.1 + C.exit - 0.3)*vh, speed = Math.max(0.5, B.softSpeed);
+          thick = Math.max(0.6, B.softCover)*vh;
+          const wkWant = g0 + (vh*0.55 + thick*(1 - B.softFadeB*0.5))/speed + vh;   // the work enters as the band's tail clears
+          const mt = Math.round(wkWant - secEnd) + 'px';
+          if (worksEl.style.marginTop !== mt){ worksEl.style.marginTop = mt; requestAnimationFrame(measureSections); }
+          sd = { g0, speed };
+          top = 0;
+        }
         else { thick = Math.min(thickW*vw, vh*0.9); top = secs.wkTop - thick*(1 - fadeB*0.6) + vh*0.05; }
+        if (!isSoft && worksEl.style.marginTop){ worksEl.style.marginTop = ''; requestAnimationFrame(measureSections); }
       }
       const pad = bob + 4, boxTop = Math.round(top - up - pad), boxH = Math.round(thick + reach + 2*pad);
       // Soft on desktop is taller than the screen, so its canvas is pinned to the screen (one screen tall) and the band is
@@ -193,10 +200,10 @@
       // edges at least as soft as the Figma layer blur
       const soft = modeNow() === 5 ? 0 : Math.min(0.45, (B.blur*2) / Math.max(1, thick));
       set1('uFadeT', isSoft ? B.softFadeT : Math.max(B.fadeTop, soft)); set1('uFadeB', isSoft ? B.softFadeB : Math.max(B.fadeBottom, soft));
-      return (L = { boxTop, boxH, dpr, H, list, pinned, top });
+      return (L = { boxTop, boxH, dpr, H, list, pinned, top, thick, reach, soft: sd });
     }
 
-    let vel = 0, rsT = 0, rsP = 0, fadeO = 1, pulled = false;
+    let vel = 0, rsP = 0, idle = 0, lastY = -1;
     let shown = false, prevY = 0, lastT = 0, lastDraw = 0, flT = 0, flP = 0, rpT = 0, rpP = 0, wvT = 0, wvP = 0;
     function tick(now){
       requestAnimationFrame(tick);
@@ -206,40 +213,35 @@
       syncPreview();
       const P = place();
       // on screen at all? (phones also wait for the hero to come in)
-      const on = modeNow() !== 7 && (!P.list || centre.classList.contains('in')) && P.boxTop < y + vh && P.boxTop + P.boxH > y;
+      // the soft band on desktop is pinned to the screen and placed by the scroll: ty is its top edge on screen
+      const ty = P.soft ? vh - (y - P.soft.g0)*P.soft.speed : 0;
+      const on = modeNow() !== 7 && (!P.list || centre.classList.contains('in')) &&
+        (P.soft ? ty < vh + 2 && ty + P.thick + P.reach > 0 : P.boxTop < y + vh && P.boxTop + P.boxH > y);
       if (on !== shown){ shown = on; cv.style.visibility = on ? 'visible' : 'hidden'; }
-      if (!on){ flP = flT; rpP = rpT; wvP = wvT; rsP = rsT; vel = 0; return; }
+      if (!on){ flP = flT; rpP = rpT; wvP = wvT; vel = 0; lastY = -1; return; }
       // scroll speed, smoothed (0 at rest → 1 at a brisk scroll); only mode 6 reads it
       const sp = dt > 0 ? Math.min(1, Math.abs(dy)*vh / dt / 2200) : 0;
       vel += (sp - vel) * (1 - Math.exp(-dt / (sp > vel ? 0.12 : 0.45)));
-      if (!reduce) rsT += dy*B.softRiseScroll + dt*B.softRiseIdle;
       if (!reduce){ flT += dy*B.flowScroll*0.6 + dt*B.flowSpeed; rpT += dy*B.rippleScroll*4 + dt*B.rippleSpeed*2; wvT += dy*B.travelScroll*0.5; }
       const k = 1 - Math.exp(-dt / B.settle);
-      flP += (flT - flP)*k; rpP += (rpT - rpP)*k; wvP += (wvT - wvP)*k; rsP += (rsT - rsP)*k;
+      flP += (flT - flP)*k; rpP += (rpT - rpP)*k; wvP += (wvT - wvP)*k;
+      // soft: every motion is a direct function of the scroll position (no easing of its own, so nothing trails the page)
+      let wvSoft = wvP;
+      if (modeNow() === 8){
+        if (!reduce) idle += dt*B.softRiseIdle;
+        const s0 = P.soft ? P.soft.g0 : P.boxTop - vh, d = (y - s0)/vh;
+        rsP = reduce ? 0 : d*B.softRiseScroll + idle; wvSoft = reduce ? 0 : d*B.travelScroll*0.5;
+        if (y === lastY && !B.softRiseIdle && !dirtyDraw) return;          // nothing moved: the canvas keeps its last frame
+        lastY = y; dirtyDraw = false;
+      }
       if (!P.pinned && now - lastDraw < 33 && lastDraw) return;      // a pinned canvas follows the scroll, so it draws every frame it's on screen                    // the flow is slow: 30 redraws a second is plenty
       lastDraw = now;
-      set1('uRipPh', rpP); set1('uFlPh', flP); set1('uWvPh', wvP);
+      set1('uRipPh', rpP); set1('uFlPh', flP); set1('uWvPh', modeNow() === 8 ? wvSoft : wvP);
       set1('uMode', modeNow()); set1('uVel', reduce ? 1 : vel); set1('uHPh', rpP*B.halfPulseSpeed);
       set1('uProg', reduce ? 1 : Math.min(1, Math.max(0, (y + vh - P.boxTop) / (vh + P.boxH))));
       // only the rows that are on screen (plus a margin for scrolling between redraws)
       set1('uSoftRisePh', rsP);
-      if (P.pinned){
-        // the band travels up faster than the page: it starts lower than its place and catches up exactly as the work arrives
-        const span = Math.max(1, secs.wkTop - (P.boxTop - vh)), left = Math.min(1, Math.max(0, (secs.wkTop - y) / span));
-        set1('uTop', P.top - y + (reduce ? 0 : B.softPar*vh*left)); gl.scissor(0, 0, cv.width, cv.height);
-        // the pull: scrolling down into the gradient hands the rest of the way to the page (once per pass; scrolling back
-        // up above it re-arms it; never while a project is open or for reduced motion)
-        const pullY = secs.wkTop - B.softPullAt*vh;
-        if (y < pullY - vh*0.2) pulled = false;
-        else if (!pulled && B.softPull && lenis && !pvOpen && dy > 0 && y >= pullY && y < secs.wkTop - 8){
-          pulled = true; lenis.scrollTo(secs.wkTop, { duration: Math.max(0.3, B.softPullTime), easing: t => 1 - Math.pow(1 - t, 3), lock: true });   // lock: further wheel input during the pull doesn't cut it short
-        }
-        // it dissolves as the work comes up, so nothing of it is left behind the work
-        const o = Math.min(1, Math.max(0, ((secs.wkTop - y)/vh - B.softGoneAt) / Math.max(0.05, B.softGoneOver))), oq = Math.round(o*o*(3 - 2*o)*100)/100;
-        if (oq !== fadeO){ fadeO = oq; cv.style.opacity = oq; }
-        if (oq <= 0) return;
-      } else if (fadeO !== 1){ fadeO = 1; cv.style.opacity = '';
-      }
+      if (P.pinned){ set1('uTop', ty); gl.scissor(0, 0, cv.width, cv.height); }
       else {
         const m = vh*0.4, r0 = Math.max(0, y - m - P.boxTop), r1 = Math.min(P.boxH, y + vh + m - P.boxTop);
         const y0 = Math.max(0, Math.floor((P.boxH - r1)*P.dpr)), h = Math.min(P.H - y0, Math.ceil((r1 - r0)*P.dpr) + 2);

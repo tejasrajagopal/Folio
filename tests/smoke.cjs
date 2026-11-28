@@ -85,6 +85,7 @@ async function run(browser, base, name, opts){
   check(name, 'All filter restores everything', (await cells()) === all);
 
   // project view: a tile opens its project over the page; Esc brings the work back where it was
+  await page.locator('.wcell:not([hidden]) .wtitle a').first().scrollIntoViewIfNeeded(); await page.waitForTimeout(400);   // the click would scroll otherwise
   const yBefore = await ev(() => Math.round(scrollY));
   await page.click('.wcell:not([hidden]) .wtitle a'); await page.waitForTimeout(1200);
   const pv = await ev(() => { const v = document.getElementById('projectView'); return { open: v.classList.contains('open'), hash: location.hash,
@@ -94,7 +95,7 @@ async function run(browser, base, name, opts){
   check(name, 'project view keeps the bar and fits the screen', pv.bar && pv.wide <= 0, JSON.stringify(pv));
   await page.keyboard.press('Escape'); await page.waitForTimeout(900);
   const back = await ev(() => ({ open: document.getElementById('projectView').classList.contains('open'), hash: location.hash, y: Math.round(scrollY) }));
-  check(name, 'Esc closes the project and returns to the work', !back.open && back.hash === '' && Math.abs(back.y - yBefore) < 4, JSON.stringify(back));
+  check(name, 'Esc closes the project and returns to the work', !back.open && back.hash === '' && Math.abs(back.y - yBefore) < 4, JSON.stringify(Object.assign(back, { before: yBefore })));
 
   // a project with its own gallery: every image is there and the first ones have loaded
   await ev(() => { location.hash = '#project-river'; }); await page.waitForTimeout(2500);

@@ -46,6 +46,6 @@
   addEventListener('pointermove', e => { mx=e.clientX/innerWidth-.5; my=e.clientY/innerHeight-.5; });
   // ---- Lenis smooth scroll (off for reduced motion)
   let lenis = null;
-  if (!reduce && window.Lenis){ lenis = new Lenis({ lerp: 0.1, smoothWheel: true }); }
+  if (!reduce && window.Lenis){ lenis = new Lenis({ lerp: 0.16, smoothWheel: true }); }
   const getScrollY = () => lenis ? lenis.scroll : scrollY;
 

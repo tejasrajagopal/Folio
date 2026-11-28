@@ -1,4 +1,4 @@
-  // ---- the work, the first time it's seen: once the grid is well on screen (after the gradient has passed) it is set out
+  // ---- the work, the first time it's seen: once the grid is a third of the way up the screen (the gradient has passed) it is set out
   // like a drawing over ~3s (styles: .wg-pre / .wg-go in base.css). Once per visit; not with reduced motion. Time-based:
   // scrolling doesn't drive it. window.FOLIO_GRID_REPLAY() plays it again (the preview's picker uses it).
   (() => {
@@ -24,6 +24,6 @@
     window.FOLIO_GRID_REPLAY = play;
     if (seen) return;
     wg.classList.add('wg-pre');                                        // bare until it's seen
-    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)){ io.disconnect(); play(); } }, { rootMargin: '0px 0px -55% 0px' });
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)){ io.disconnect(); play(); } }, { rootMargin: '0px 0px -30% 0px' });
     io.observe(wg);
   })();

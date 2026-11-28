@@ -52,18 +52,20 @@
       `</div></div><div class="pv-g">${rows}</div></div>`;
     pvEl.setAttribute('aria-label', name);
   }
-  let pvFocusBack = null, pvCameFromSite = false;
+  let pvFocusBack = null, pvCameFromSite = false, pvY = 0;
   function pvSync(){
     const m = /^#project-(.+)$/.exec(location.hash), all = pvProjects();
     const name = m && [...all.keys()].find(n => pvSlug(n) === m[1]);
     if (name){
-      if (!pvOpen) pvFocusBack = document.activeElement;
+      if (!pvOpen){ pvFocusBack = document.activeElement; pvY = scrollY; }
       pvRender(name, all.get(name)); pvEl.hidden = false; pvEl.scrollTop = 0;
       pvOpen = true; document.documentElement.classList.add('pv-open'); if (lenis) lenis.stop();
       $('main').inert = true;
       requestAnimationFrame(() => { pvEl.classList.add('open'); $('pvTitle').focus({ preventScroll: true }); });
     } else if (pvOpen){
-      pvOpen = false; pvEl.classList.remove('open'); document.documentElement.classList.remove('pv-open'); if (lenis) lenis.start();
+      pvOpen = false; pvEl.classList.remove('open'); document.documentElement.classList.remove('pv-open');
+      // back exactly where the visitor was (the smooth scroller could otherwise resume from a stale position)
+      scrollTo(0, pvY); if (lenis){ lenis.start(); lenis.scrollTo(pvY, { immediate: true, force: true }); }
       $('main').inert = false;
       setTimeout(() => { if (!pvOpen){ pvEl.hidden = true; pvEl.innerHTML = ''; } }, 260);
       if (pvFocusBack && pvFocusBack.focus) pvFocusBack.focus({ preventScroll: true });
